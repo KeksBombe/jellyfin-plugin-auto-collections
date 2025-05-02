@@ -37,8 +37,22 @@ With this enhanced version, you can:
 
 The Auto Collections are kept up to date each time the task runs, automatically adding or removing items as they match or no longer match your criteria.
 
-![image](https://github.com/user-attachments/assets/9142abc9-5417-4015-985a-098e10e8baa8)
+Settings I use for 2x Collection by Title, 1x Studio, 1x Genre
+![image](https://github.com/user-attachments/assets/8c44b541-3381-44df-9742-4c7b2d486403)
 
+Grouped by Genre:
+![Screenshot 2025-05-02 173135](https://github.com/user-attachments/assets/e9a66659-7df2-4f45-aec7-d199b8b94d03)
+
+Grouped by Title:
+![Screenshot 2025-05-02 174300](https://github.com/user-attachments/assets/8bf7e874-d8a9-4778-a3dd-8764cc2b7532)
+
+Grouped by Studio:
+![Screenshot 2025-05-02 173910](https://github.com/user-attachments/assets/b3d8847b-5393-487f-8933-2d556d8ac2cc)
+
+Disclamer:
+All images used in this repository are purely **mock-up** or **placeholder** examples and are **not** representations of real media. They are intended solely to demonstrate the functionality of the plugin.
+No copyrighted material is included or referenced in this project. Any resemblance to actual movie posters or media is purely coincidental.
+This project does not use or distribute any copyrighted media content.
 
 ## Install Process
 
