@@ -143,13 +143,31 @@
           matchTypeSelect.appendChild(titleOption);
           matchTypeSelect.appendChild(genreOption);
           matchTypeSelect.appendChild(studioOption);
-          
-          // Set the selected option based on matchType parameter
+            // Set the selected option based on matchType parameter
           if (matchType !== undefined) {
             matchTypeSelect.value = matchType.toString();
+            
+            // Properly set the selected attribute on the option element
+            const options = matchTypeSelect.querySelectorAll('option');
+            options.forEach(option => {
+              if (option.value === matchType.toString()) {
+                option.selected = true;
+              } else {
+                option.selected = false;
+              }
+            });
           }
           
           matchTypeContainer.appendChild(matchTypeSelect);
+          
+          // This ensures the Emby select component is properly initialized
+          setTimeout(() => {
+            if (matchTypeSelect.embyInit) {
+              matchTypeSelect.embyInit();
+            } else if (window.EmbyWebComponents && window.EmbyWebComponents.autoFocus) {
+              window.EmbyWebComponents.autoFocus(matchTypeSelect.parentNode);
+            }
+          }, 0);
             // Create a dynamic update for the placeholder text based on the selected match type
           const updatePlaceholder = (select) => {
             const matchType = parseInt(select.value, 10);
