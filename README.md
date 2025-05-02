@@ -37,6 +37,9 @@ With this enhanced version, you can:
 
 The Auto Collections are kept up to date each time the task runs, automatically adding or removing items as they match or no longer match your criteria.
 
+![image](https://github.com/user-attachments/assets/9142abc9-5417-4015-985a-098e10e8baa8)
+
+
 ## Install Process
 
 1. In Jellyfin, go to `Dashboard -> Plugins -> Catalog -> Gear Icon (upper left)` add and a repository.
