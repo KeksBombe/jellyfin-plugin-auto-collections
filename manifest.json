@@ -1,0 +1,76 @@
+[
+    {
+        "guid": "06ebf4a9-1326-4327-968d-8da00e1ea2eb",
+        "name": "Auto Collection",
+        "overview": "Enables creation of Auto Collections based on Tag",
+        "description": "Enables creation of Auto Collections based on Tag",
+        "owner": "KeksBombe",
+        "category": "General",
+        "versions": [
+            {
+                "version": "0.0.0.8",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.8)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.8/smart-collections-0.0.0.8.zip",
+                "checksum": "f193c45b747c33c70eefc06f4d588049",
+                "timestamp": "2025-04-23T02:05:06Z"
+            },
+            {
+                "version": "0.0.0.7",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.7)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.7/smart-collections-0.0.0.7.zip",
+                "checksum": "3389d02d2d3a866f9a8b97f070382499",
+                "timestamp": "2025-04-06T17:25:18Z"
+            },
+            {
+                "version": "0.0.0.6",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.6)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.6/smart-collections-0.0.0.6.zip",
+                "checksum": "2edbf884e194be554b878acd92d7d544",
+                "timestamp": "2025-03-30T15:56:00Z"
+            },
+            {
+                "version": "0.0.0.5",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.5)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.5/smart-collections-0.0.0.5.zip",
+                "checksum": "a6a1be1bab12ac434fe9bc6be7d934c0",
+                "timestamp": "2025-03-22T04:29:05Z"
+            },
+            {
+                "version": "0.0.0.4",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.4)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.4/smart-collections-0.0.0.4.zip",
+                "checksum": "73868138931ab05711eaf49feb4b9105",
+                "timestamp": "2025-03-07T21:55:03Z"
+            },
+            {
+                "version": "0.0.0.3",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.3)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.3/smart-collections-0.0.0.3.zip",
+                "checksum": "8c115c162808a64827f1f2092fa64844",
+                "timestamp": "2025-03-07T01:54:11Z"
+            },
+            {
+                "version": "0.0.0.2",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/tag/0.0.0.2)\n",
+                "targetAbi": "10.9.9.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.2/smart-collections-0.0.0.2.zip",
+                "checksum": "4b4072afa1d7f5f17a5edbdaf0cb3fee",
+                "timestamp": "2025-03-07T01:03:49Z"
+            },
+            {
+                "version": "0.0.0.1",
+                "changelog": "Initial Release",
+                "targetAbi": "10.8.10.0",
+                "sourceUrl": "https://github.com/johnpc/jellyfin-plugin-smart-collections/releases/download/0.0.0.1/smart-collections-0.0.0.1.zip",
+                "checksum": "10110a16be92f4e8de84ac0c19fc316c",
+                "timestamp": "2025-06-06T01:40:00Z"
+            }
+        ]
+    }
+]
