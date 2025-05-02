@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>Smart Collections</title>
+    <title>Auto Collections</title>
     <style>      .title-match-container {
         margin-bottom: 10px;
         display: flex;
@@ -60,17 +60,17 @@
         <div class="content-primary">
           <form class="tbsConfigurationPage">
             <div class="sectionTitleContainer flex align-items-center">
-              <h2 class="sectionTitle">Smart Collections</h2>
+              <h2 class="sectionTitle">Auto Collections</h2>
               <a
                 is="emby-linkbutton"
                 class="raised button-alt headerHelpButton emby-button"
                 target="_blank"
-                href="https://github.com/johnpc/jellyfin-plugin-smart-collections"
+                href="https://github.com/johnpc/jellyfin-plugin-Auto-collections"
                 >Help</a
               >
             </div>
             <div class="verticalSection">              <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Smart Collections:</label>
+                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Auto Collections:</label>
                 <div class="help-text">Create collections based on a string match. Select the type (Title, Studio, or Genre), enter the string to match, and provide an optional collection name.</div>
                 <div id="title-match-pairs"></div>
               </div>
@@ -81,7 +81,7 @@
                 type="button"
                 class="raised add-title-match-button"
               >
-                <span>Add Smart Collection</span>
+                <span>Add Auto Collection</span>
               </button>
               
               <br />
@@ -98,10 +98,10 @@
               is="emby-button"
               type="button"
               class="raised block"
-              id="sync-smart-collections"
+              id="sync-Auto-collections"
               onclick="execute()"
             >
-              <span>Sync Smart Collections</span>
+              <span>Sync Auto Collections</span>
             </button>
           </form>
         </div>
@@ -328,13 +328,13 @@
         
         function execute() {
           var request = {
-            url: ApiClient.getUrl("/SmartCollections/SmartCollections"),
+            url: ApiClient.getUrl("/AutoCollections/AutoCollections"),
             type: "POST",
           };
 
           ApiClient.fetch(request)
             .then(function () {
-              Dashboard.alert("Executing Smart Collections...");
+              Dashboard.alert("Executing Auto Collections...");
             })
             .catch(function () {
               Dashboard.alert({

@@ -4,9 +4,9 @@ const VERSION = process.env.VERSION;
 
 // Read csproj
 const csprojPath =
-  "./Jellyfin.Plugin.SmartCollections/Jellyfin.Plugin.SmartCollections.csproj";
+  "./Jellyfin.Plugin.AutoCollections/Jellyfin.Plugin.AutoCollections.csproj";
 if (!fs.existsSync(csprojPath)) {
-  console.error("Jellyfin.Plugin.SmartCollections.csproj file not found");
+  console.error("Jellyfin.Plugin.AutoCollections.csproj file not found");
   process.exit(1);
 }
 

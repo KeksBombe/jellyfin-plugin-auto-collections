@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Jellyfin.Plugin.SmartCollections.Configuration
+namespace Jellyfin.Plugin.AutoCollections.Configuration
 {
     // Kept for backward compatibility
     public enum TagMatchingMode
@@ -23,7 +23,7 @@ namespace Jellyfin.Plugin.SmartCollections.Configuration
         public TagTitlePair()
         {
             Tag = string.Empty;
-            Title = "Smart Collection";
+            Title = "Auto Collection";
             MatchingMode = TagMatchingMode.Or; // Default to OR for backward compatibility
         }
 
@@ -37,13 +37,13 @@ namespace Jellyfin.Plugin.SmartCollections.Configuration
         private static string GetDefaultTitle(string tag)
         {
             if (string.IsNullOrEmpty(tag))
-                return "Smart Collection";
+                return "Auto Collection";
                 
             // If there are multiple tags, use the first one for the default title
             string firstTag = tag.Split(',')[0].Trim();
             return firstTag.Length > 0
-                ? char.ToUpper(firstTag[0]) + firstTag[1..] + " Smart Collection"
-                : "Smart Collection";
+                ? char.ToUpper(firstTag[0]) + firstTag[1..] + " Auto Collection"
+                : "Auto Collection";
         }
         
         // Helper method to get individual tags as an array
@@ -57,7 +57,7 @@ namespace Jellyfin.Plugin.SmartCollections.Configuration
                 .Where(t => !string.IsNullOrEmpty(t))
                 .ToArray();
         }
-    }    // Match types for smart collections
+    }    // Match types for Auto collections
     public enum MatchType
     {
         Title = 0,   // Default - match by movie/series title
@@ -77,7 +77,7 @@ namespace Jellyfin.Plugin.SmartCollections.Configuration
         public TitleMatchPair()
         {
             TitleMatch = string.Empty;
-            CollectionName = "Smart Collection";
+            CollectionName = "Auto Collection";
             CaseSensitive = false; // Default to case insensitive
             MatchType = MatchType.Title; // Default to title matching for backward compatibility
         }
@@ -93,7 +93,7 @@ namespace Jellyfin.Plugin.SmartCollections.Configuration
         private static string GetDefaultCollectionName(string matchString, MatchType matchType)
         {
             if (string.IsNullOrEmpty(matchString))
-                return "Smart Collection";
+                return "Auto Collection";
                 
             return matchType switch
             {

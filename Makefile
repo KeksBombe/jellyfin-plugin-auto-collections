@@ -6,7 +6,7 @@ build:
 	dotnet build
 
 zip:
-	zip "${FILE}" Jellyfin.Plugin.AutoCollection/bin/Debug/net8.0/Jellyfin.Plugin.AutoCollection.dll
+	zip "${FILE}" Jellyfin.Plugin.AutoCollections/bin/Debug/net8.0/Jellyfin.Plugin.AutoCollections.dll
 
 csum:
 	md5sum "${FILE} ""

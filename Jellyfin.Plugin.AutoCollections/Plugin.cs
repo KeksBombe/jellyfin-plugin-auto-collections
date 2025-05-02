@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Jellyfin.Plugin.SmartCollections.Configuration;
+using Jellyfin.Plugin.AutoCollections.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller;
 using MediaBrowser.Model.Plugins;
@@ -11,11 +11,11 @@ using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
 
-namespace Jellyfin.Plugin.SmartCollections
+namespace Jellyfin.Plugin.AutoCollections
 {
     public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
-        private readonly SmartCollectionsManager _syncSmartCollectionsManager;
+        private readonly AutoCollectionsManager _syncAutoCollectionsManager;
 
         public Plugin(
             IServerApplicationPaths appPaths,
@@ -27,11 +27,11 @@ namespace Jellyfin.Plugin.SmartCollections
             : base(appPaths, xmlSerializer)
         {
             Instance = this;
-            _syncSmartCollectionsManager = new SmartCollectionsManager(
+            _syncAutoCollectionsManager = new AutoCollectionsManager(
                 providerManager,
                 collectionManager,
                 libraryManager,
-                loggerFactory.CreateLogger<SmartCollectionsManager>(),
+                loggerFactory.CreateLogger<AutoCollectionsManager>(),
                 appPaths);
 
             // Initialize configuration with defaults only on first run
@@ -109,10 +109,10 @@ namespace Jellyfin.Plugin.SmartCollections
             #pragma warning restore CS0618
         }
 
-        public override string Name => "Smart Collections";
+        public override string Name => "Auto Collections";
 
         public static Plugin Instance { get; private set; }        public override string Description
-            => "Enables creation of Smart Collections based on Title, Studio, or Genre with custom collection names";        
+            => "Enables creation of Auto Collections based on Title, Studio, or Genre with custom collection names";        
         
         private readonly Guid _id = new Guid("06ebf4a9-1326-4327-968d-8da00e1ea2eb");
         public override Guid Id => _id;
@@ -123,7 +123,7 @@ namespace Jellyfin.Plugin.SmartCollections
             {
                 new PluginPageInfo
                 {
-                    Name = "Smart Collections",
+                    Name = "Auto Collections",
                     EmbeddedResourcePath = GetType().Namespace + ".Configuration.configurationpage.html"
                 }
             };

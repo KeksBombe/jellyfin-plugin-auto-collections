@@ -19,28 +19,28 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
-using Jellyfin.Plugin.SmartCollections.Configuration;
+using Jellyfin.Plugin.AutoCollections.Configuration;
 
-namespace Jellyfin.Plugin.SmartCollections
+namespace Jellyfin.Plugin.AutoCollections
 
 {
-    public class SmartCollectionsManager : IDisposable
+    public class AutoCollectionsManager : IDisposable
     {
         private readonly ICollectionManager _collectionManager;
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
         private readonly Timer _timer;
-        private readonly ILogger<SmartCollectionsManager> _logger;
+        private readonly ILogger<AutoCollectionsManager> _logger;
         private readonly string _pluginDirectory;
 
-        public SmartCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, ILogger<SmartCollectionsManager> logger, IApplicationPaths applicationPaths)
+        public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
         {
             _providerManager = providerManager;
             _collectionManager = collectionManager;
             _libraryManager = libraryManager;
             _logger = logger;
             _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
-            _pluginDirectory = Path.Combine(applicationPaths.DataPath, "smartcollections");
+            _pluginDirectory = Path.Combine(applicationPaths.DataPath, "Autocollections");
             Directory.CreateDirectory(_pluginDirectory);
         }
 
@@ -312,41 +312,41 @@ namespace Jellyfin.Plugin.SmartCollections
                 IncludeItemTypes = new[] { BaseItemKind.BoxSet },
                 CollapseBoxSetItems = false,
                 Recursive = true,
-                Tags = new[] { "smartcollection" },
+                Tags = new[] { "Autocollection" },
                 Name = name,
             }).Select(b => b as BoxSet).FirstOrDefault();
         }
 
-        public async Task ExecuteSmartCollectionsNoProgress()
+        public async Task ExecuteAutoCollectionsNoProgress()
         {
-            _logger.LogInformation("Performing ExecuteSmartCollections");
+            _logger.LogInformation("Performing ExecuteAutoCollections");
             
             // Get title match pairs from configuration - this is the new approach
             var titleMatchPairs = Plugin.Instance!.Configuration.TitleMatchPairs;
 
-            _logger.LogInformation($"Starting execution of smart collections for {titleMatchPairs.Count} title match pairs");
+            _logger.LogInformation($"Starting execution of Auto collections for {titleMatchPairs.Count} title match pairs");
 
             foreach (var titleMatchPair in titleMatchPairs)
             {
                 try
                 {
-                    _logger.LogInformation($"Processing smart collection for title match: {titleMatchPair.TitleMatch}");
-                    await ExecuteSmartCollectionsForTitleMatchPair(titleMatchPair);
+                    _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch}");
+                    await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Error processing smart collection for title match: {titleMatchPair.TitleMatch}");
+                    _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
                     // Continue with next title-match pair even if one fails
                     continue;
                 }
             }
 
-            _logger.LogInformation("Completed execution of all smart collections");
+            _logger.LogInformation("Completed execution of all Auto collections");
         }
 
-        public async Task ExecuteSmartCollections(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task ExecuteAutoCollections(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            await ExecuteSmartCollectionsNoProgress();
+            await ExecuteAutoCollectionsNoProgress();
         }
 
         private string GetCollectionName(TagTitlePair tagTitlePair)
@@ -360,7 +360,7 @@ namespace Jellyfin.Plugin.SmartCollections
             // Otherwise use the default format based on the first tag
             string[] tags = tagTitlePair.GetTagsArray();
             if (tags.Length == 0)
-                return "Smart Collection";
+                return "Auto Collection";
                 
             string firstTag = tags[0];
             string capitalizedTag = firstTag.Length > 0
@@ -373,7 +373,7 @@ namespace Jellyfin.Plugin.SmartCollections
                 return $"{capitalizedTag} + {tags.Length - 1} more tags";
             }
 
-            return $"{capitalizedTag} Smart Collection";
+            return $"{capitalizedTag} Auto Collection";
         }
 
         private async Task SetPhotoForCollection(BoxSet collection, Person? specificPerson = null)
@@ -510,9 +510,9 @@ namespace Jellyfin.Plugin.SmartCollections
             }
         }
 
-        private async Task ExecuteSmartCollectionsForTagTitlePair(TagTitlePair tagTitlePair)
+        private async Task ExecuteAutoCollectionsForTagTitlePair(TagTitlePair tagTitlePair)
         {
-            _logger.LogInformation($"Performing ExecuteSmartCollections for tag: {tagTitlePair.Tag}");
+            _logger.LogInformation($"Performing ExecuteAutoCollections for tag: {tagTitlePair.Tag}");
             
             // Get the collection name from the tag-title pair
             var collectionName = GetCollectionName(tagTitlePair);
@@ -528,7 +528,7 @@ namespace Jellyfin.Plugin.SmartCollections
                     Name = collectionName,
                     IsLocked = true
                 });
-                collection.Tags = new[] { "smartcollection" };
+                collection.Tags = new[] { "Autocollection" };
                 isNewCollection = true;
             }
             collection.DisplayOrder = "Default";
@@ -614,7 +614,7 @@ namespace Jellyfin.Plugin.SmartCollections
             {
                 _logger.LogInformation("Preserving existing image for collection: {CollectionName}", collectionName);
             }
-        }        private async Task ExecuteSmartCollectionsForTitleMatchPair(TitleMatchPair titleMatchPair)
+        }        private async Task ExecuteAutoCollectionsForTitleMatchPair(TitleMatchPair titleMatchPair)
         {
             string matchTypeText = titleMatchPair.MatchType switch
             {
@@ -624,7 +624,7 @@ namespace Jellyfin.Plugin.SmartCollections
                 _ => "title"
             };
             
-            _logger.LogInformation($"Performing ExecuteSmartCollections for {matchTypeText} match: {titleMatchPair.TitleMatch}");
+            _logger.LogInformation($"Performing ExecuteAutoCollections for {matchTypeText} match: {titleMatchPair.TitleMatch}");
             
             // Get the collection name from the match pair
             var collectionName = titleMatchPair.CollectionName;
@@ -640,7 +640,7 @@ namespace Jellyfin.Plugin.SmartCollections
                     Name = collectionName,
                     IsLocked = true
                 });
-                collection.Tags = new[] { "smartcollection" };
+                collection.Tags = new[] { "Autocollection" };
                 isNewCollection = true;
             }
             collection.DisplayOrder = "Default";
