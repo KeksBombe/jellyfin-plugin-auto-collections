@@ -2,7 +2,8 @@
 <html>
   <head>
     <title>Auto Collections</title>
-    <style>      .title-match-container {
+    <style>      
+    .title-match-container {
         margin-bottom: 10px;
         display: flex;
         align-items: center;
@@ -49,6 +50,7 @@
       }
     </style>
   </head>
+
   <body>
     <div
       data-role="page"
@@ -58,259 +60,113 @@
       <div data-role="content">
         <div class="content-primary">
           <form class="tbsConfigurationPage">
-            <div class="page-header sectionTitleContainer flex align-items-center">
+            <div class="sectionTitleContainer flex align-items-center">
               <h2 class="sectionTitle">Auto Collections</h2>
               <a
                 is="emby-linkbutton"
                 class="raised button-alt headerHelpButton emby-button"
                 target="_blank"
                 href="https://github.com/johnpc/jellyfin-plugin-Auto-collections"
-                >Help</a
-              >
+              >Help</a>
             </div>
             <div class="verticalSection">
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Auto Collections</label>
-                <div class="help-text">
-                  Create smart collections based on matching criteria. Select the type (Title, Genre, Studio, Actor, Director), 
-                  enter the string to match, and provide an optional collection name.
-                </div>
+                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Auto Collections:</label>
+                <div class="help-text">Create collections based on a string match. Select the type (Title, Studio, Genre, Actor, or Director), enter the string to match, and provide an optional collection name.</div>
                 <div id="title-match-pairs"></div>
-                <div id="empty-collections-state" class="empty-state" style="display: none;">
-                  <p>No auto collections configured yet. Add your first collection below.</p>
-                </div>
-              </div>                <button
+              </div>
+              
+              <button
                 id="add-title-match-button"
                 is="emby-button"
                 type="button"
-                class="raised add-title-match-button emby-button"
+                class="raised add-title-match-button"
               >
                 <span>Add Auto Collection</span>
               </button>
               
-              <div class="page-actions">
-                <button
-                  id="saveConfiguration"
-                  is="emby-button"
-                  class="raised button-submit block action-button primary"
-                >
-                  <span>Save Changes</span>
-                </button>
-                <button
-                  is="emby-button"
-                  type="button"
-                  class="raised block action-button"
-                  id="sync-Auto-collections"
-                  onclick="execute()"
-                >
-                  <span>Sync Collections Now</span>
-                </button>
-              </div>
+              <br />
+              <button
+                id="saveConfiguration"
+                is="emby-button"
+                class="raised button-submit block"
+              >
+                <span>Save</span>
+              </button>
             </div>
+            <br />
+            <button
+              is="emby-button"
+              type="button"
+              class="raised block"
+              id="sync-Auto-collections"
+              onclick="execute()"
+            >
+              <span>Sync Auto Collections</span>
+            </button>
           </form>
-          
-          <!-- Toast notification element -->
-          <div id="toast" class="toast"></div>
         </div>
-      </div>      <script type="text/javascript">
-        // Toast notification function
-        function showToast(message, isError = false) {
-          const toast = document.getElementById('toast');
-          toast.textContent = message;
-          toast.className = isError ? 'toast error' : 'toast';
-          toast.classList.add('show');
-          
-          setTimeout(() => {
-            toast.classList.remove('show');
-          }, 3000);
-        }
-          function updateEmptyState() {
-          const titleMatchPairs = document.querySelectorAll('.title-match-container');
-          const emptyState = document.getElementById('empty-collections-state');
-          
-          if (titleMatchPairs.length === 0) {
-            emptyState.style.display = 'block';
-          } else {
-            emptyState.style.display = 'none';
-          }
-        }
-          function addNewCollection(e) {
-          // Prevent default if event is provided (to prevent form submission)
-          if (e) e.preventDefault();
-          
-          // Only add the element once
-          const element = createTitleMatchPairElement();
-          document.querySelector("#title-match-pairs").appendChild(element);
-          updateEmptyState();
-          
-          // Return false to prevent any additional default behavior
-          return false;
-        }
-          function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
-          // Ensure matchType is a number
-          matchType = parseInt(matchType, 10) || 0;
-          console.log('Creating element with matchType:', matchType);
-          
+      </div>
+
+      <script type="text/javascript" defer>
+        function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
           const container = document.createElement('div');
           container.className = 'title-match-container';
-          
-          // Create match type section
+          container.style.display = 'flex';
+          container.style.flexWrap = 'wrap';
+          container.style.alignItems = 'center';
+          container.style.padding = '8px';
+          container.style.marginBottom = '10px';
+          container.style.borderRadius = '4px';
+          container.style.backgroundColor = 'rgba(0,0,0,0.05)';
+            
+          // Create match type dropdown
           const matchTypeContainer = document.createElement('div');
           matchTypeContainer.className = 'match-type-container';
-          
-          const matchTypeLabel = document.createElement('label');
-          matchTypeLabel.className = 'input-label';
-          matchTypeLabel.textContent = 'Match Type';
+          matchTypeContainer.style.marginRight = '10px';
+          matchTypeContainer.style.minWidth = '100px';
+          matchTypeContainer.style.flex = '0 0 100px';
           
           const matchTypeSelect = document.createElement('select');
           matchTypeSelect.is = 'emby-select';
           matchTypeSelect.className = 'match-type-select';
-            // Define match types with labels
-          const matchTypes = [
+            
+          // Add match type options
+          const options = [
             { value: '0', text: 'Title' },
             { value: '1', text: 'Genre' },
             { value: '2', text: 'Studio' },
             { value: '3', text: 'Actor' },
             { value: '4', text: 'Director' }
-          ];          // Add match type options
-          matchTypes.forEach(type => {
+          ];
+          
+          options.forEach(opt => {
             const option = document.createElement('option');
-            option.value = type.value;
-            option.text = type.text;
+            option.value = opt.value;
+            option.text = opt.text;
             matchTypeSelect.appendChild(option);
           });
-          
-          // Set the selected value after adding all options
-          const currentMatchType = parseInt(matchType, 10);
-          console.log(`Setting select to match type: ${currentMatchType}`);
-          
-          // First set the value directly
-          matchTypeSelect.value = currentMatchType.toString();
-          
-          // Then also set the selected property on the matching option
-          const selectedOption = Array.from(matchTypeSelect.options).find(
-            option => parseInt(option.value, 10) === currentMatchType
-          );
-          
-          if (selectedOption) {
-            selectedOption.selected = true;
-            console.log(`Selected option: ${selectedOption.text}`);
-          } else {
-            console.log(`Could not find option for match type: ${currentMatchType}`);
+            
+          // Set the selected option based on matchType parameter
+          if (matchType !== undefined) {
+            matchTypeSelect.value = matchType.toString();
           }
           
-          matchTypeContainer.appendChild(matchTypeLabel);
-          matchTypeContainer.appendChild(matchTypeSelect);          // This ensures the Emby select component is properly initialized
+          matchTypeContainer.appendChild(matchTypeSelect);
+          
+          // This ensures the Emby select component is properly initialized
           setTimeout(() => {
-            // Run initialization
             if (matchTypeSelect.embyInit) {
               matchTypeSelect.embyInit();
             } else if (window.EmbyWebComponents && window.EmbyWebComponents.autoFocus) {
               window.EmbyWebComponents.autoFocus(matchTypeSelect.parentNode);
             }
-            
-            // After Emby initialization, ensure our value is still selected
-            // because Emby might override it during initialization
-            const currentMatchType = parseInt(matchType, 10);
-            matchTypeSelect.value = currentMatchType.toString();
-            
-            // Log for debugging
-            console.log(`After initialization, select value should be ${currentMatchType}, and is: ${matchTypeSelect.value}`);
           }, 0);
-          
-          // Create match string input
-          const titleMatchContainer = document.createElement('div');
-          titleMatchContainer.className = 'input-field-container';
-          
-          const titleMatchLabel = document.createElement('label');
-          titleMatchLabel.className = 'input-label';
-          titleMatchLabel.textContent = 'Match String';
-          
-          const titleMatchInput = document.createElement('input');
-          titleMatchInput.is = 'emby-input';
-          titleMatchInput.type = 'text';
-          titleMatchInput.className = 'title-match-input';
-          titleMatchInput.value = titleMatch;
-          
-          titleMatchContainer.appendChild(titleMatchLabel);
-          titleMatchContainer.appendChild(titleMatchInput);
-          
-          // Create collection name input
-          const collectionNameContainer = document.createElement('div');
-          collectionNameContainer.className = 'input-field-container';
-          
-          const collectionNameLabel = document.createElement('label');
-          collectionNameLabel.className = 'input-label';
-          collectionNameLabel.textContent = 'Collection Name';
-          
-          const collectionNameInput = document.createElement('input');
-          collectionNameInput.is = 'emby-input';
-          collectionNameInput.type = 'text';
-          collectionNameInput.className = 'collection-name-input';
-          collectionNameInput.placeholder = 'Optional - uses match string if empty';
-          collectionNameInput.value = collectionName;
-          
-          collectionNameContainer.appendChild(collectionNameLabel);
-          collectionNameContainer.appendChild(collectionNameInput);
-          
-          // Create case-sensitive checkbox
-          const caseCheckContainer = document.createElement('div');
-          caseCheckContainer.className = 'case-sensitive-container';
-          
-          const caseCheckboxWrapper = document.createElement('div');
-          caseCheckboxWrapper.className = 'case-sensitive-check';
-          
-          const caseCheckbox = document.createElement('input');
-          caseCheckbox.is = 'emby-checkbox';
-          caseCheckbox.type = 'checkbox';
-          caseCheckbox.className = 'case-sensitive-checkbox';
-          caseCheckbox.id = `case-sensitive-${Date.now()}`;
-          caseCheckbox.checked = caseSensitive;
-          
-          const caseLabel = document.createElement('label');
-          caseLabel.className = 'case-label';
-          caseLabel.setAttribute('for', caseCheckbox.id);
-          caseLabel.textContent = 'Case Sensitive';
-          
-          caseCheckboxWrapper.appendChild(caseCheckbox);
-          caseCheckboxWrapper.appendChild(caseLabel);
-          caseCheckContainer.appendChild(caseCheckboxWrapper);
-          
-          // Create actions container (for remove button)
-          const actionsContainer = document.createElement('div');
-          actionsContainer.className = 'actions-container';
-          
-          const removeButton = document.createElement('button');
-          removeButton.is = 'emby-button';
-          removeButton.type = 'button';
-          removeButton.className = 'remove-button';
-          removeButton.innerHTML = '<span>✕</span>';
-          removeButton.title = 'Remove this collection';
-          
-          removeButton.onclick = function() {
-            container.style.opacity = '0';
-            container.style.transform = 'translateY(-10px)';
-            container.style.transition = 'all 0.3s ease';
             
-            setTimeout(() => {
-              container.remove();
-              updateEmptyState();
-            }, 300);
-          };
-          
-          actionsContainer.appendChild(removeButton);
-          
-          // Add all components to container
-          container.appendChild(matchTypeContainer);
-          container.appendChild(titleMatchContainer);
-          container.appendChild(collectionNameContainer);
-          container.appendChild(caseCheckContainer);
-          container.appendChild(actionsContainer);
-          
           // Create a dynamic update for the placeholder text based on the selected match type
           const updatePlaceholder = (select) => {
             const matchType = parseInt(select.value, 10);
-            const input = select.closest('.title-match-container').querySelector('.title-match-input');
+            const input = container.querySelector('.title-match-input');
             if (input) {
               switch(matchType) {
                 case 1: // Genre
@@ -320,13 +176,13 @@
                   input.placeholder = 'Studio to match (e.g. Marvel, Paramount)';
                   break;
                 case 3: // Actor
-                  input.placeholder = 'Actor name to match (e.g. Tom Hanks)';
+                  input.placeholder = 'Actor name to match (e.g. Tom Hanks, Scarlett)';
                   break;
                 case 4: // Director
-                  input.placeholder = 'Director name to match (e.g. Christopher Nolan)';
+                  input.placeholder = 'Director name to match (e.g. Spielberg, Nolan)';
                   break;
                 default: // Title
-                  input.placeholder = 'Text in title to match (e.g. Star Wars)';
+                  input.placeholder = 'Text in title to match';
               }
             }
           };
@@ -335,61 +191,139 @@
           matchTypeSelect.addEventListener('change', () => {
             updatePlaceholder(matchTypeSelect);
           });
+            
+          const titleMatchContainer = document.createElement('div');
+          titleMatchContainer.style.flex = '1 1 200px';
+          titleMatchContainer.style.marginRight = '10px';
+          
+          const titleMatchInput = document.createElement('input');
+          titleMatchInput.is = 'emby-input';
+          titleMatchInput.type = 'text';
+          titleMatchInput.className = 'title-match-input';
+          titleMatchInput.style.width = '100%';
+          titleMatchInput.placeholder = 'Match String';
+          titleMatchInput.value = titleMatch;
+          
+          titleMatchContainer.appendChild(titleMatchInput);
           
           // Set initial placeholder based on match type
           setTimeout(() => updatePlaceholder(matchTypeSelect), 0);
+            
+          const collectionNameContainer = document.createElement('div');
+          collectionNameContainer.style.flex = '1 1 200px';
+          collectionNameContainer.style.marginRight = '10px';
+          
+          const collectionNameInput = document.createElement('input');
+          collectionNameInput.is = 'emby-input';
+          collectionNameInput.type = 'text';
+          collectionNameInput.className = 'collection-name-input';
+          collectionNameInput.style.width = '100%';
+          collectionNameInput.placeholder = 'Collection Name (optional)';
+          collectionNameInput.value = collectionName;
+          
+          collectionNameContainer.appendChild(collectionNameInput);
+            
+          // Create case-sensitive checkbox
+          const caseCheckContainer = document.createElement('div');
+          caseCheckContainer.className = 'case-sensitive-check';
+          caseCheckContainer.style.flex = '0 0 auto';
+          caseCheckContainer.style.display = 'flex';
+          caseCheckContainer.style.alignItems = 'center';
+          caseCheckContainer.style.marginRight = '10px';
+          
+          const caseCheckboxWrapper = document.createElement('div');
+          caseCheckboxWrapper.style.marginRight = '5px';
+          
+          const caseCheckbox = document.createElement('input');
+          caseCheckbox.is = 'emby-checkbox';
+          caseCheckbox.type = 'checkbox';
+          caseCheckbox.className = 'case-sensitive-checkbox';
+          caseCheckbox.checked = caseSensitive;
+          
+          const caseLabel = document.createElement('label');
+          caseLabel.className = 'case-label';
+          caseLabel.textContent = 'Case Sensitive';
+          caseLabel.style.marginLeft = '5px';
+          caseLabel.style.fontSize = '14px';
+          
+          caseCheckboxWrapper.appendChild(caseCheckbox);
+          caseCheckContainer.appendChild(caseCheckboxWrapper);
+          caseCheckContainer.appendChild(caseLabel);
+            
+          const removeButton = document.createElement('button');
+          removeButton.is = 'emby-button';
+          removeButton.type = 'button';
+          removeButton.className = 'remove-button';
+          removeButton.innerHTML = '<span>✕</span>';
+          removeButton.style.flex = '0 0 auto';
+          removeButton.style.minWidth = '32px';
+          removeButton.style.height = '32px';
+          removeButton.style.padding = '0';
+          removeButton.style.borderRadius = '50%';
+          removeButton.onclick = function() {
+            container.remove();
+          };
+          
+          // Add all components to container in order
+          container.appendChild(matchTypeContainer);
+          container.appendChild(titleMatchContainer);
+          container.appendChild(collectionNameContainer);
+          container.appendChild(caseCheckContainer);
+          container.appendChild(removeButton);
           
           return container;
         }
         
         function loadConfig() {
           window.ApiClient.getPluginConfiguration(
-            "06ebf4a9-1326-4327-968d-8da00e1ea2eb" // Plugin Id
-          )
+            "06ebf4a9-1326-4327-968d-8da00e1ea2eb"
+          ) // Plugin Id
             .then(function (config) {
               const titleMatchPairsContainer = document.querySelector("#title-match-pairs");
               titleMatchPairsContainer.innerHTML = '';
                 
               // Check if we have the TitleMatchPairs property
               if (config.TitleMatchPairs && config.TitleMatchPairs.length > 0) {
-                config.TitleMatchPairs.forEach(pair => {                  const element = createTitleMatchPairElement(
+                config.TitleMatchPairs.forEach(pair => {
+                  const element = createTitleMatchPairElement(
                     pair.TitleMatch, 
                     pair.CollectionName, 
                     pair.CaseSensitive, 
-                    pair.MatchType !== undefined ? parseInt(pair.MatchType, 10) : 0 // Default to Title if not specified, ensure it's a number
+                    pair.MatchType !== undefined ? pair.MatchType : 0 // Default to Title if not specified
                   );
                   titleMatchPairsContainer.appendChild(element);
                 });
-                updateEmptyState();
               } 
               else {
-                // Show empty state UI
-                updateEmptyState();
+                // If no configuration exists yet, add one empty row
+                const element = createTitleMatchPairElement();
+                titleMatchPairsContainer.appendChild(element);
               }
             })
             .catch(function (error) {
               console.error(error);
-              showToast('Error loading configuration', true);
-              updateEmptyState();
+              // Add an empty row if there's an error
+              const element = createTitleMatchPairElement();
+              document.querySelector("#title-match-pairs").appendChild(element);
             });
         }
-        
+          
         function saveConfig() {
           const titleMatchContainers = document.querySelectorAll('.title-match-container');
           const titleMatchPairs = [];
-          
+            
           titleMatchContainers.forEach(container => {
+            // Handle our new nested structure
             const titleMatchInput = container.querySelector('.title-match-input');
             const collectionNameInput = container.querySelector('.collection-name-input');
             const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
             const matchTypeSelect = container.querySelector('.match-type-select');
             
-            if (titleMatchInput.value.trim()) {              const titleMatch = titleMatchInput.value.trim();
+            if (titleMatchInput.value.trim()) {
+              const titleMatch = titleMatchInput.value.trim();
               const collectionName = collectionNameInput.value.trim();
               const caseSensitive = caseSensitiveCheckbox.checked;
               const matchType = parseInt(matchTypeSelect.value, 10);
-              
-              console.log(`Saving collection with matchType: ${matchType}`);
               
               titleMatchPairs.push({
                 TitleMatch: titleMatch,
@@ -411,48 +345,39 @@
             "06ebf4a9-1326-4327-968d-8da00e1ea2eb",
             config
           )
-            .then(() => {
-              showToast('Configuration saved successfully');
-            })
+            .then(() => alert("Update success"))
             .catch(function (error) {
               console.error(error);
-              showToast('Error saving configuration', true);
+              alert("Error saving configuration");
             });
         }
         
         function execute() {
           var request = {
             url: ApiClient.getUrl("/AutoCollections/AutoCollections"),
-            type: "POST",
+            type: "POST"
           };
 
           ApiClient.fetch(request)
             .then(function () {
-              showToast('Sync started successfully');
+              Dashboard.alert("Executing Auto Collections...");
             })
             .catch(function () {
-              showToast('An unexpected error occurred', true);
-            });        }
-        
+              Dashboard.alert({
+                message: "Unexpected error occurred!"
+              });
+            });
+        }
+
         // Initialize the page
-        function initPage() {
-          loadConfig();
-          
-          // Add event listeners
-          document.querySelector("#saveConfiguration").addEventListener("click", function(e) {
-            e.preventDefault();
-            saveConfig();
-          });
-          
-          document.querySelector("#add-title-match-button").addEventListener("click", addNewCollection);
-        }
+        loadConfig();
         
-        // Call init function immediately or when DOM is loaded
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', initPage);
-        } else {
-          initPage();
-        }
+        // Add event listeners
+        document.querySelector("#saveConfiguration").addEventListener("click", saveConfig);
+        document.querySelector("#add-title-match-button").addEventListener("click", function() {
+          const element = createTitleMatchPairElement();
+          document.querySelector("#title-match-pairs").appendChild(element);
+        });
       </script>
     </div>
   </body>
