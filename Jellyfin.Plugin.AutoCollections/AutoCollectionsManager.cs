@@ -194,35 +194,42 @@ namespace Jellyfin.Plugin.AutoCollections
             }
             
             return results;
-        }        private IEnumerable<Movie> GetMoviesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType)
+        }        
+        
+        private IEnumerable<Movie> GetMoviesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType)
         {
-            // Get all movies from the library
+            // Get all non-null movies from the library
             var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie },
                 IsVirtualItem = false,
                 Recursive = true
-            }).Select(m => m as Movie);
+            }).OfType<Movie>();
             
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
-              // Filter movies based on match type
+            
+            // Filter movies based on match type
             return matchType switch
             {
                 Configuration.MatchType.Title => allMovies.Where(movie => 
-                    movie?.Name != null && movie.Name.Contains(matchString, comparison)),
+                    !string.IsNullOrEmpty(movie.Name) && movie.Name.Contains(matchString, comparison)),
                 
                 Configuration.MatchType.Genre => allMovies.Where(movie => 
-                    movie?.Genres != null && movie.Genres.Any(genre => 
-                        genre.Contains(matchString, comparison))),
+                    movie.Genres != null && movie.Genres.Any(genre => 
+                        !string.IsNullOrEmpty(genre) && genre.Contains(matchString, comparison))),
                 
                 Configuration.MatchType.Studio => allMovies.Where(movie => 
-                    movie?.Studios != null && movie.Studios.Any(studio => 
-                        studio.Contains(matchString, comparison))),
+                    movie.Studios != null && movie.Studios.Any(studio => 
+                        !string.IsNullOrEmpty(studio) && studio.Contains(matchString, comparison))),
+                
+                Configuration.MatchType.Actor => GetMoviesWithPerson(matchString, "Actor", caseSensitive),
+                
+                Configuration.MatchType.Director => GetMoviesWithPerson(matchString, "Director", caseSensitive),
                 
                 _ => allMovies.Where(movie => 
-                    movie?.Name != null && movie.Name.Contains(matchString, comparison)) // Default to title match
+                    !string.IsNullOrEmpty(movie.Name) && movie.Name.Contains(matchString, comparison))
             };
         }
           private IEnumerable<Series> GetSeriesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType)
@@ -237,8 +244,7 @@ namespace Jellyfin.Plugin.AutoCollections
             
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
-                : StringComparison.OrdinalIgnoreCase;
-              // Filter series based on match type
+                : StringComparison.OrdinalIgnoreCase;              // Filter series based on match type
             return matchType switch
             {
                 Configuration.MatchType.Title => allSeries.Where(series => 
@@ -251,6 +257,24 @@ namespace Jellyfin.Plugin.AutoCollections
                 Configuration.MatchType.Studio => allSeries.Where(series => 
                     series?.Studios != null && series.Studios.Any(studio => 
                         studio.Contains(matchString, comparison))),
+                
+                Configuration.MatchType.Actor => _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Series },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    Person = matchString,
+                    PersonTypes = new[] { "Actor" }
+                }).Select(s => s as Series),
+                
+                Configuration.MatchType.Director => _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Series },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    Person = matchString,
+                    PersonTypes = new[] { "Director" }
+                }).Select(s => s as Series),
                 
                 _ => allSeries.Where(series => 
                     series?.Name != null && series.Name.Contains(matchString, comparison)) // Default to title match
@@ -615,12 +639,13 @@ namespace Jellyfin.Plugin.AutoCollections
                 _logger.LogInformation("Preserving existing image for collection: {CollectionName}", collectionName);
             }
         }        private async Task ExecuteAutoCollectionsForTitleMatchPair(TitleMatchPair titleMatchPair)
-        {
-            string matchTypeText = titleMatchPair.MatchType switch
+        {            string matchTypeText = titleMatchPair.MatchType switch
             {
                 Configuration.MatchType.Title => "title",
                 Configuration.MatchType.Genre => "genre",
                 Configuration.MatchType.Studio => "studio",
+                Configuration.MatchType.Actor => "actor",
+                Configuration.MatchType.Director => "director",
                 _ => "title"
             };
             
@@ -691,6 +716,114 @@ namespace Jellyfin.Plugin.AutoCollections
         public void Dispose()
         {
             _timer?.Dispose();
+        }
+
+        // Helper method to find movies with a specific person type (actor or director) 
+        // that match the given string (partial or exact matching)
+        private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
+        {
+            StringComparison comparison = caseSensitive 
+                ? StringComparison.Ordinal 
+                : StringComparison.OrdinalIgnoreCase;
+
+            // First get all persons of the specified type (actor or director)
+            var persons = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Person },
+                Recursive = true
+            }).Select(p => p as Person)
+                .Where(p => p?.Name != null && p.Name.Contains(personNameToMatch, comparison))
+                .ToList();
+            
+            _logger.LogInformation("Found {Count} {PersonType}s matching '{NameToMatch}'", 
+                persons.Count, personType, personNameToMatch);
+            
+            if (!persons.Any())
+            {
+                return Enumerable.Empty<Movie>();
+            }
+            
+            // For each matching person, find their movies and combine results
+            var result = new HashSet<Movie>();
+            foreach (var person in persons)
+            {
+                if (person?.Name != null)
+                {
+                    // Use exact name matching for the person's actual name
+                    var movies = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Movie },
+                        IsVirtualItem = false,
+                        Recursive = true,
+                        Person = person.Name, // Exact name
+                        PersonTypes = new[] { personType }
+                    }).Select(m => m as Movie);
+                    
+                    foreach (var movie in movies)
+                    {
+                        if (movie != null)
+                        {
+                            result.Add(movie);
+                        }
+                    }
+                }
+            }
+            
+            return result;
+        }
+        
+        // Helper method to find series with a specific person type (actor or director) 
+        // that match the given string (partial or exact matching)
+        private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
+        {
+            StringComparison comparison = caseSensitive 
+                ? StringComparison.Ordinal 
+                : StringComparison.OrdinalIgnoreCase;
+                
+            // First get all persons of the specified type (actor or director)
+            var persons = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Person },
+                Recursive = true
+            }).Select(p => p as Person)
+                .Where(p => p?.Name != null && p.Name.Contains(personNameToMatch, comparison))
+                .ToList();
+            
+            _logger.LogInformation("Found {Count} {PersonType}s matching '{NameToMatch}'", 
+                persons.Count, personType, personNameToMatch);
+            
+            if (!persons.Any())
+            {
+                return Enumerable.Empty<Series>();
+            }
+            
+            // For each matching person, find their series and combine results
+            var result = new HashSet<Series>();
+            foreach (var person in persons)
+            {
+                if (person?.Name != null)
+                {
+                    // Use exact name matching for the person's actual name
+                    var series = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        IsVirtualItem = false,
+                        Recursive = true,
+                        Person = person.Name, // Exact name
+                        PersonTypes = new[] { personType }
+                    }).Select(s => s as Series);
+                    
+                    foreach (var s in series)
+                    {
+                        if (s != null)
+                        {
+                            result.Add(s);
+                        }
+                    }
+                }
+            }
+            
+            return result;
         }
     }
 }

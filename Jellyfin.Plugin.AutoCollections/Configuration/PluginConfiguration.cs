@@ -62,7 +62,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
     {
         Title = 0,   // Default - match by movie/series title
         Genre = 1,   // Match by genre
-        Studio = 2   // Match by studio
+        Studio = 2,  // Match by studio
+        Actor = 3,   // Match by actor
+        Director = 4 // Match by director
     }
 
     // Class for match-based collections (previously title-based only)
@@ -88,9 +90,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             CollectionName = collectionName ?? GetDefaultCollectionName(titleMatch, matchType);
             CaseSensitive = caseSensitive;
             MatchType = matchType;
-        }
-
-        private static string GetDefaultCollectionName(string matchString, MatchType matchType)
+        }        private static string GetDefaultCollectionName(string matchString, MatchType matchType)
         {
             if (string.IsNullOrEmpty(matchString))
                 return "Auto Collection";
@@ -99,6 +99,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             {
                 MatchType.Genre => $"{matchString} Genre",
                 MatchType.Studio => $"{matchString} Studio Productions",
+                MatchType.Actor => $"{matchString} Acting",
+                MatchType.Director => $"{matchString} Directed",
                 _ => $"{matchString} Movies" // Default for Title and any future types
             };
         }
