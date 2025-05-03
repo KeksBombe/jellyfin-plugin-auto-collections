@@ -2,255 +2,51 @@
 <html>
   <head>
     <title>Auto Collections</title>
-    <style>
-      :root {
-        --primary-color: var(--accent, #00a4dc);
-        --primary-color-hover: #0085b3;
-        --background-color-hover: rgba(0, 0, 0, 0.1);
-        --card-background: rgba(0, 0, 0, 0.05);
-        --card-border-radius: 8px;
-        --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        --button-border-radius: 4px;
-        --input-border-radius: 4px;
-        --spacing-xs: 4px;
-        --spacing-sm: 8px;
-        --spacing-md: 16px;
-        --spacing-lg: 24px;
-        --spacing-xl: 32px;
-        --transition-speed: 0.2s;
-      }
-      
-      .page-header {
-        margin-bottom: var(--spacing-lg);
-        padding-bottom: var(--spacing-md);
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-      }
-      
-      .sectionTitle {
-        margin-top: 0;
-        font-size: 1.5rem;
-        font-weight: 500;
-      }
-        .title-match-container {
-        margin-bottom: var(--spacing-md);
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        padding: var(--spacing-md);
-        border-radius: var(--card-border-radius);
-        background-color: var(--card-background);
-        box-shadow: var(--card-shadow);
-        transition: box-shadow var(--transition-speed), transform var(--transition-speed);
-        gap: var(--spacing-sm);
-        justify-content: flex-start;
-      }
-      
-      .title-match-container:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        transform: translateY(-2px);
-      }
-        .match-type-container {
-        width: auto;
-        margin-right: var(--spacing-md);
-        flex: 0 0 120px;
-        margin-bottom: var(--spacing-sm);
-      }
-      
-      .input-field-container {
-        margin-right: var(--spacing-md);
-        flex: 1 1 200px;
-        margin-bottom: var(--spacing-sm);
-      }
-      
-      .case-sensitive-container {
+    <style>      .title-match-container {
+        margin-bottom: 10px;
         display: flex;
         align-items: center;
-        margin-bottom: var(--spacing-sm);
-        flex: 0 0 auto;
       }
-      
-      .actions-container {
-        display: flex;
-        justify-content: flex-end;
-        margin-left: auto;
+      .match-type-container {
+        width: 100px;
+        margin-right: 10px;
       }
-      
-      @media (max-width: 600px) {
-        .match-type-container {
-          width: 100%;
-          flex: 1 1 100%;
-        }
-        
-        .input-field-container {
-          width: 100%;
-          flex: 1 1 100%;
-        }
-        
-        .case-sensitive-container {
-          width: 100%;
-          flex: 1 1 100%;
-        }
-        
-        .actions-container {
-          width: 100%;
-          justify-content: flex-start;
-          margin-top: var(--spacing-sm);
-        }
-      }
-      
-      .input-label {
-        display: block;
-        margin-bottom: var(--spacing-xs);
-        font-size: 0.9rem;
-        color: rgba(0, 0, 0, 0.7);
-      }
-      
-      .match-type-select,
-      .title-match-input,
-      .collection-name-input {
+      .match-type-select {
         width: 100%;
-        border-radius: var(--input-border-radius);
       }
-      
+      .title-match-input {
+        flex: 1;
+        margin-right: 10px;
+      }
+      .collection-name-input {
+        flex: 1;
+        margin-right: 10px;
+      }
       .case-sensitive-check {
+        margin-right: 10px;
         display: flex;
         align-items: center;
       }
-      
       .case-label {
         white-space: nowrap;
-        margin-left: var(--spacing-xs);
-        font-size: 0.9rem;
+        margin-right: 5px;
       }
-      
+      .add-title-match-button {
+        margin-bottom: 15px;
+      }
       .remove-button {
-        background-color: transparent;
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: background-color var(--transition-speed);
+        margin-left: 10px;
+        min-width: 40px;
       }
-      
-      .remove-button:hover {
-        background-color: var(--background-color-hover);
-      }
-      
-      .remove-button span {
-        font-size: 16px;
-        color: rgba(0, 0, 0, 0.5);
-      }
-      
       #title-match-pairs {
-        margin-bottom: var(--spacing-lg);
+        margin-bottom: 20px;
       }
-      
       .help-text {
         font-size: 0.9em;
-        color: rgba(0, 0, 0, 0.6);
-        margin-top: var(--spacing-xs);
-        margin-bottom: var(--spacing-md);
-        line-height: 1.4;
+        color: #888;
+        margin-top: 5px;
+        margin-bottom: 15px;
       }
-      
-      .page-actions {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-md);
-        margin-top: var(--spacing-lg);
-      }
-      
-      @media (min-width: 768px) {
-        .page-actions {
-          flex-direction: row;
-          justify-content: space-between;
-        }
-        
-        .page-actions button {
-          flex: 1;
-        }
-      }
-        .add-title-match-button {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: 100% !important;
-        margin-bottom: var(--spacing-lg) !important;
-        background-color: transparent !important;
-        border: 1px dashed rgba(0, 0, 0, 0.2) !important;
-        border-radius: var(--button-border-radius) !important;
-        padding: var(--spacing-sm) var(--spacing-md) !important;
-        cursor: pointer !important;
-        transition: all var(--transition-speed) !important;
-      }
-      
-      .add-title-match-button:hover {
-        background-color: var(--background-color-hover) !important;
-        border-color: rgba(0, 0, 0, 0.3) !important;
-      }
-      
-      .add-title-match-button span::before {
-        content: '+';
-        display: inline-block;
-        margin-right: var(--spacing-xs);
-        font-weight: bold;
-      }
-      
-      .action-button {
-        border-radius: var(--button-border-radius);
-        padding: var(--spacing-sm) var(--spacing-md);
-        cursor: pointer;
-        transition: background-color var(--transition-speed), transform var(--transition-speed);
-      }
-      
-      .action-button:hover {
-        transform: translateY(-2px);
-      }
-      
-      .action-button.primary {
-        background-color: var(--primary-color);
-      }
-      
-      .action-button.primary:hover {
-        background-color: var(--primary-color-hover);
-      }
-      
-      .empty-state {
-        text-align: center;
-        padding: var(--spacing-xl);
-        color: rgba(0, 0, 0, 0.5);
-      }
-      
-      /* Toast notification styles */
-      .toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: #4CAF50;
-        color: white;
-        padding: 12px 24px;
-        border-radius: 4px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        transition: all 0.3s ease;
-        opacity: 0;
-        transform: translateY(20px);
-        z-index: 1000;
-      }
-      
-      .toast.show {
-        opacity: 1;
-        transform: translateY(0);
-      }
-      
-      .toast.error {
-        background-color: #F44336;
-      }
-      
     </style>
   </head>
   <body>
@@ -350,8 +146,11 @@
           // Return false to prevent any additional default behavior
           return false;
         }
-        
-        function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
+          function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
+          // Ensure matchType is a number
+          matchType = parseInt(matchType, 10) || 0;
+          console.log('Creating element with matchType:', matchType);
+          
           const container = document.createElement('div');
           container.className = 'title-match-container';
           
@@ -373,29 +172,50 @@
             { value: '2', text: 'Studio' },
             { value: '3', text: 'Actor' },
             { value: '4', text: 'Director' }
-          ];
-          
-          // Add match type options
+          ];          // Add match type options
           matchTypes.forEach(type => {
             const option = document.createElement('option');
             option.value = type.value;
             option.text = type.text;
-            if (matchType.toString() === type.value) {
-              option.selected = true;
-            }
             matchTypeSelect.appendChild(option);
           });
           
-          matchTypeContainer.appendChild(matchTypeLabel);
-          matchTypeContainer.appendChild(matchTypeSelect);
+          // Set the selected value after adding all options
+          const currentMatchType = parseInt(matchType, 10);
+          console.log(`Setting select to match type: ${currentMatchType}`);
           
-          // This ensures the Emby select component is properly initialized
+          // First set the value directly
+          matchTypeSelect.value = currentMatchType.toString();
+          
+          // Then also set the selected property on the matching option
+          const selectedOption = Array.from(matchTypeSelect.options).find(
+            option => parseInt(option.value, 10) === currentMatchType
+          );
+          
+          if (selectedOption) {
+            selectedOption.selected = true;
+            console.log(`Selected option: ${selectedOption.text}`);
+          } else {
+            console.log(`Could not find option for match type: ${currentMatchType}`);
+          }
+          
+          matchTypeContainer.appendChild(matchTypeLabel);
+          matchTypeContainer.appendChild(matchTypeSelect);          // This ensures the Emby select component is properly initialized
           setTimeout(() => {
+            // Run initialization
             if (matchTypeSelect.embyInit) {
               matchTypeSelect.embyInit();
             } else if (window.EmbyWebComponents && window.EmbyWebComponents.autoFocus) {
               window.EmbyWebComponents.autoFocus(matchTypeSelect.parentNode);
             }
+            
+            // After Emby initialization, ensure our value is still selected
+            // because Emby might override it during initialization
+            const currentMatchType = parseInt(matchType, 10);
+            matchTypeSelect.value = currentMatchType.toString();
+            
+            // Log for debugging
+            console.log(`After initialization, select value should be ${currentMatchType}, and is: ${matchTypeSelect.value}`);
           }, 0);
           
           // Create match string input
@@ -532,12 +352,11 @@
                 
               // Check if we have the TitleMatchPairs property
               if (config.TitleMatchPairs && config.TitleMatchPairs.length > 0) {
-                config.TitleMatchPairs.forEach(pair => {
-                  const element = createTitleMatchPairElement(
+                config.TitleMatchPairs.forEach(pair => {                  const element = createTitleMatchPairElement(
                     pair.TitleMatch, 
                     pair.CollectionName, 
                     pair.CaseSensitive, 
-                    pair.MatchType !== undefined ? pair.MatchType : 0 // Default to Title if not specified
+                    pair.MatchType !== undefined ? parseInt(pair.MatchType, 10) : 0 // Default to Title if not specified, ensure it's a number
                   );
                   titleMatchPairsContainer.appendChild(element);
                 });
@@ -565,11 +384,12 @@
             const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
             const matchTypeSelect = container.querySelector('.match-type-select');
             
-            if (titleMatchInput.value.trim()) {
-              const titleMatch = titleMatchInput.value.trim();
+            if (titleMatchInput.value.trim()) {              const titleMatch = titleMatchInput.value.trim();
               const collectionName = collectionNameInput.value.trim();
               const caseSensitive = caseSensitiveCheckbox.checked;
               const matchType = parseInt(matchTypeSelect.value, 10);
+              
+              console.log(`Saving collection with matchType: ${matchType}`);
               
               titleMatchPairs.push({
                 TitleMatch: titleMatch,
