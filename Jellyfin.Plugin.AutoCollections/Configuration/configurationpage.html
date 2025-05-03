@@ -175,26 +175,26 @@
           flex: 1;
         }
       }
-      
-      .add-title-match-button {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: var(--spacing-lg);
-        background-color: transparent;
-        border: 1px dashed rgba(0, 0, 0, 0.2);
-        border-radius: var(--button-border-radius);
-        padding: var(--spacing-sm) var(--spacing-md);
-        cursor: pointer;
-        transition: all var(--transition-speed);
+        .add-title-match-button {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        margin-bottom: var(--spacing-lg) !important;
+        background-color: transparent !important;
+        border: 1px dashed rgba(0, 0, 0, 0.2) !important;
+        border-radius: var(--button-border-radius) !important;
+        padding: var(--spacing-sm) var(--spacing-md) !important;
+        cursor: pointer !important;
+        transition: all var(--transition-speed) !important;
       }
       
       .add-title-match-button:hover {
-        background-color: var(--background-color-hover);
-        border-color: rgba(0, 0, 0, 0.3);
+        background-color: var(--background-color-hover) !important;
+        border-color: rgba(0, 0, 0, 0.3) !important;
       }
       
-      .add-title-match-button span:before {
+      .add-title-match-button span::before {
         content: '+';
         display: inline-block;
         margin-right: var(--spacing-xs);
@@ -251,21 +251,6 @@
         background-color: #F44336;
       }
       
-      /* Animation for adding new items */
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      
-      .title-match-container {
-        animation: fadeIn 0.3s ease-out;
-      }
     </style>
   </head>
   <body>
@@ -299,12 +284,12 @@
                   <p>No auto collections configured yet. Add your first collection below.</p>
                 </div>
               </div>
-              
-              <button
+                <button
                 id="add-title-match-button"
                 is="emby-button"
                 type="button"
-                class="raised add-title-match-button"
+                class="raised add-title-match-button emby-button"
+                onclick="addNewCollection()"
               >
                 <span>Add Auto Collection</span>
               </button>
@@ -333,7 +318,7 @@
           <!-- Toast notification element -->
           <div id="toast" class="toast"></div>
         </div>
-      </div>      <script type="text/javascript" defer>
+      </div>      <script type="text/javascript">
         // Toast notification function
         function showToast(message, isError = false) {
           const toast = document.getElementById('toast');
@@ -345,8 +330,7 @@
             toast.classList.remove('show');
           }, 3000);
         }
-        
-        function updateEmptyState() {
+          function updateEmptyState() {
           const titleMatchPairs = document.querySelectorAll('.title-match-container');
           const emptyState = document.getElementById('empty-collections-state');
           
@@ -355,6 +339,12 @@
           } else {
             emptyState.style.display = 'none';
           }
+        }
+        
+        function addNewCollection() {
+          const element = createTitleMatchPairElement();
+          document.querySelector("#title-match-pairs").appendChild(element);
+          updateEmptyState();
         }
         
         function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
@@ -620,10 +610,8 @@
             .catch(function () {
               showToast('An unexpected error occurred', true);
             });
-        }
-
-        // Initialize the page
-        document.addEventListener('DOMContentLoaded', function() {
+        }        // Initialize the page
+        function initPage() {
           loadConfig();
           
           // Add event listeners
@@ -637,7 +625,14 @@
             document.querySelector("#title-match-pairs").appendChild(element);
             updateEmptyState();
           });
-        });
+        }
+        
+        // Call init function immediately or when DOM is loaded
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initPage);
+        } else {
+          initPage();
+        }
       </script>
     </div>
   </body>
