@@ -284,12 +284,38 @@
                 
               // Check if we have the TitleMatchPairs property
               if (config.TitleMatchPairs && config.TitleMatchPairs.length > 0) {
-                config.TitleMatchPairs.forEach(pair => {
+                config.TitleMatchPairs.forEach(pair => {                  // Convert MatchType enum string to numeric value for the dropdown
+                  let matchTypeValue = 0; // Default to Title
+                  if (pair.MatchType !== undefined) {
+                    switch (pair.MatchType) {
+                      case "Title":
+                        matchTypeValue = 0;
+                        break;
+                      case "Genre":
+                        matchTypeValue = 1;
+                        break;
+                      case "Studio":
+                        matchTypeValue = 2;
+                        break;
+                      case "Actor":
+                        matchTypeValue = 3;
+                        break;
+                      case "Director":
+                        matchTypeValue = 4;
+                        break;
+                      // Fallback for numeric values (backward compatibility)
+                      default:
+                        if (typeof pair.MatchType === 'number') {
+                          matchTypeValue = pair.MatchType;
+                        }
+                    }
+                  }
+                  
                   const element = createTitleMatchPairElement(
                     pair.TitleMatch, 
                     pair.CollectionName, 
                     pair.CaseSensitive, 
-                    pair.MatchType !== undefined ? pair.MatchType : 0 // Default to Title if not specified
+                    matchTypeValue
                   );
                   titleMatchPairsContainer.appendChild(element);
                 });
@@ -318,18 +344,38 @@
             const collectionNameInput = container.querySelector('.collection-name-input');
             const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
             const matchTypeSelect = container.querySelector('.match-type-select');
-            
-            if (titleMatchInput.value.trim()) {
+              if (titleMatchInput.value.trim()) {
               const titleMatch = titleMatchInput.value.trim();
               const collectionName = collectionNameInput.value.trim();
               const caseSensitive = caseSensitiveCheckbox.checked;
-              const matchType = parseInt(matchTypeSelect.value, 10);
+              // Convert numeric value to enum string representation
+              const matchTypeValue = parseInt(matchTypeSelect.value, 10);
+              let matchTypeString;
+              switch (matchTypeValue) {
+                case 0:
+                  matchTypeString = "Title";
+                  break;
+                case 1:
+                  matchTypeString = "Genre";
+                  break;
+                case 2:
+                  matchTypeString = "Studio";
+                  break;
+                case 3:
+                  matchTypeString = "Actor";
+                  break;
+                case 4:
+                  matchTypeString = "Director";
+                  break;
+                default:
+                  matchTypeString = "Title";
+              }
               
               titleMatchPairs.push({
                 TitleMatch: titleMatch,
                 CollectionName: collectionName || null, // Use null if collection name is empty
                 CaseSensitive: caseSensitive,
-                MatchType: matchType
+                MatchType: matchTypeString
               });
             }
           });
