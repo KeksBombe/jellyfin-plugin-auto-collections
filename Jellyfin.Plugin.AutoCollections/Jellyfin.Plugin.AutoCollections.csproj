@@ -3,8 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>true</IsPackable>
-    <AssemblyVersion>0.0.1.10</AssemblyVersion>
-    <FileVersion>0.0.1.10</FileVersion>
+    <AssemblyVersion>0.0.1.11</AssemblyVersion>
+    <FileVersion>0.0.1.11</FileVersion>
     <Authors />
     <Company />
     <RootNamespace>Jellyfin.Plugin.AutoCollections</RootNamespace>

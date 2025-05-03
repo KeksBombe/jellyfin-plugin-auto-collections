@@ -140,9 +140,19 @@
           studioOption.value = '2'; // MatchType.Studio = 2
           studioOption.text = 'Studio';
           
+          const actorOption = document.createElement('option');
+          actorOption.value = '3'; // MatchType.Actor = 3
+          actorOption.text = 'Actor';
+          
+          const directorOption = document.createElement('option');
+          directorOption.value = '4'; // MatchType.Director = 4
+          directorOption.text = 'Director';
+          
           matchTypeSelect.appendChild(titleOption);
           matchTypeSelect.appendChild(genreOption);
           matchTypeSelect.appendChild(studioOption);
+          matchTypeSelect.appendChild(actorOption);
+          matchTypeSelect.appendChild(directorOption);
             // Set the selected option based on matchType parameter
           if (matchType !== undefined) {
             matchTypeSelect.value = matchType.toString();
@@ -179,6 +189,12 @@
                   break;
                 case 2: // Studio
                   input.placeholder = 'Studio to match (e.g. Marvel, Paramount)';
+                  break;
+                case 3: // Actor
+                  input.placeholder = 'Actor name to match (e.g. Tom Hanks, Morgan Freeman)';
+                  break;
+                case 4: // Director
+                  input.placeholder = 'Director name to match (e.g. Christopher Nolan)';
                   break;
                 default: // Title
                   input.placeholder = 'Text in title to match';
