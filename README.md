@@ -37,6 +37,37 @@ With this enhanced version, you can:
 
 The Auto Collections are kept up to date each time the task runs, automatically adding or removing items as they match or no longer match your criteria.
 
+## Advanced Expression-based Collections
+
+For power users, this plugin also supports advanced expression-based collections using a simple query language:
+
+- **Boolean Operators**: Combine criteria using AND, OR, NOT and parentheses
+- **Multiple Criteria Types**: TITLE, GENRE, STUDIO, ACTOR, DIRECTOR
+- **Complex Rules**: Create sophisticated collection rules with advanced logic
+
+### Expression Syntax
+
+```
+TITLE "string" AND GENRE "string"
+STUDIO "string" OR STUDIO "another string" 
+NOT DIRECTOR "string"
+ACTOR "string" AND (GENRE "string" OR GENRE "another string")
+```
+
+### Examples
+
+1. **Movies with a specific actor in a specific genre**:
+   - `ACTOR "Tom Hanks" AND GENRE "Drama"`
+
+2. **Movies from either of two studios**:
+   - `STUDIO "Warner Bros." OR STUDIO "Universal Pictures"`
+
+3. **Movies by a director but excluding a specific genre**:
+   - `DIRECTOR "Christopher Nolan" AND NOT GENRE "Horror"`
+
+4. **Movies with complex criteria**:
+   - `(TITLE "Star" AND GENRE "Sci-Fi") OR (STUDIO "Lucasfilm" AND NOT GENRE "Documentary")`
+
 Settings I use for 2x Collection by Title, 1x Studio, 1x Genre
 ![image](https://github.com/user-attachments/assets/8c44b541-3381-44df-9742-4c7b2d486403)
 
@@ -66,6 +97,8 @@ This project does not use or distribute any copyrighted media content.
 
 ## User Guide
 
+### Basic Collections
+
 1. To set it up, visit `Dashboard -> Plugins -> My Plugins -> Auto Collections`
 2. For each auto collection you want to create:
    - Select the match type (Title, Studio, or Genre) from the dropdown
@@ -75,6 +108,21 @@ This project does not use or distribute any copyrighted media content.
 3. Click "Save"
 4. Click "Sync Auto Collections" to update your collections immediately
 5. Your Collections now exist!
+
+### Expression-based Collections
+
+1. In the Auto Collections plugin settings, scroll to the "Expression Collections" section
+2. Click "Add Expression Collection"
+3. Enter:
+   - Collection Name: What you want your collection to be called
+   - Expression: Create your complex query using the syntax described above
+   - Case Sensitive: Toggle if you want case-sensitive matching
+4. Click "Save"
+5. Click "Sync Auto Collections" to update your collections
+
+Example: To create a collection of Christopher Nolan sci-fi films:
+- Collection Name: "Nolan Sci-Fi"
+- Expression: `DIRECTOR "Christopher Nolan" AND GENRE "Sci-Fi"`
 
 Note: The Auto Collections Sync task is also available in your Scheduled Tasks section and runs automatically every 24 hours.
 

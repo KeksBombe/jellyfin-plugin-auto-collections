@@ -41,12 +41,27 @@
       }
       #title-match-pairs {
         margin-bottom: 20px;
-      }
-      .help-text {
+      }      .help-text {
         font-size: 0.9em;
         color: #888;
         margin-top: 5px;
         margin-bottom: 15px;
+      }
+      .expression-container {
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+      }
+      code {
+        background-color: rgba(0, 0, 0, 0.1);
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: monospace;
+      }
+      .section-divider {
+        margin-top: 30px;
+        margin-bottom: 20px;
+        border-top: 1px solid rgba(128, 128, 128, 0.2);
       }
     </style>
   </head>
@@ -70,9 +85,8 @@
               >Help</a>
             </div>
             <div class="verticalSection">
-              <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Auto Collections:</label>
-                <div class="help-text">Create collections based on a string match. Select the type (Title, Studio, Genre, Actor, or Director), enter the string to match, and provide an collection name.</div>
+              <div class="inputContainer">                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Simple Collections:</label>
+                <div class="help-text">Create collections based on a simple string match. Select the type (Title, Studio, Genre, Actor, or Director), enter the string to match, and provide a collection name.</div>
                 <div id="title-match-pairs"></div>
               </div>
               
@@ -82,7 +96,28 @@
                 type="button"
                 class="raised add-title-match-button"
               >
-                <span>Add Auto Collection</span>
+                <span>Add Simple Collection</span>              </button>
+
+              <div class="section-divider"></div>
+              
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="expression-collections">Advanced Collections:</label>
+                <div class="help-text">
+                  Create collections using complex boolean expressions. Examples:<br>
+                  <code>TITLE "Avengers"</code> - Items with "Avengers" in the title<br>
+                  <code>STUDIO "Marvel" AND GENRE "Action"</code> - Marvel action items<br>
+                  <code>STUDIO "Marvel" AND (TITLE "Spiderman" OR ACTOR "Robert Downey JR.")</code> - Marvel items with Spiderman in the title or starring Robert Downey Jr.
+                </div>
+                <div id="expression-collections"></div>
+              </div>
+              
+              <button
+                id="add-expression-collection-button"
+                is="emby-button"
+                type="button"
+                class="raised add-title-match-button"
+              >
+                <span>Add Advanced Collection</span>
               </button>
               
               <br />
@@ -106,9 +141,100 @@
             </button>
           </form>
         </div>
-      </div>
-
-      <script type="text/javascript" defer>
+      </div>      <script type="text/javascript" defer>
+        // For expression-based collections
+        function createExpressionCollectionElement(expression = '', collectionName = '', caseSensitive = false) {
+          const container = document.createElement('div');
+          container.className = 'expression-container';
+          container.style.display = 'flex';
+          container.style.flexWrap = 'wrap';
+          container.style.alignItems = 'center';
+          container.style.padding = '8px';
+          container.style.marginBottom = '10px';
+          container.style.borderRadius = '4px';
+          container.style.backgroundColor = 'rgba(0,0,0,0.05)';
+          
+          // Collection Name Input
+          const collectionNameContainer = document.createElement('div');
+          collectionNameContainer.style.flex = '1 1 200px';
+          collectionNameContainer.style.marginRight = '10px';
+          
+          const collectionNameInput = document.createElement('input');
+          collectionNameInput.is = 'emby-input';
+          collectionNameInput.type = 'text';
+          collectionNameInput.className = 'collection-name-input';
+          collectionNameInput.style.width = '100%';
+          collectionNameInput.placeholder = 'Collection Name';
+          collectionNameInput.value = collectionName;
+          
+          collectionNameContainer.appendChild(collectionNameInput);
+          
+          // Expression Input
+          const expressionContainer = document.createElement('div');
+          expressionContainer.style.flex = '1 1 300px';
+          expressionContainer.style.marginRight = '10px';
+          
+          const expressionInput = document.createElement('input');
+          expressionInput.is = 'emby-input';
+          expressionInput.type = 'text';
+          expressionInput.className = 'expression-input';
+          expressionInput.style.width = '100%';
+          expressionInput.placeholder = 'TITLE "Avengers" OR (STUDIO "Marvel" AND GENRE "Action")';
+          expressionInput.value = expression;
+          
+          expressionContainer.appendChild(expressionInput);
+          
+          // Case-sensitive checkbox
+          const caseCheckContainer = document.createElement('div');
+          caseCheckContainer.className = 'case-sensitive-check';
+          caseCheckContainer.style.flex = '0 0 auto';
+          caseCheckContainer.style.display = 'flex';
+          caseCheckContainer.style.alignItems = 'center';
+          caseCheckContainer.style.marginRight = '10px';
+          
+          const caseCheckboxWrapper = document.createElement('div');
+          caseCheckboxWrapper.style.marginRight = '5px';
+          
+          const caseCheckbox = document.createElement('input');
+          caseCheckbox.is = 'emby-checkbox';
+          caseCheckbox.type = 'checkbox';
+          caseCheckbox.className = 'case-sensitive-checkbox';
+          caseCheckbox.checked = caseSensitive;
+          
+          const caseLabel = document.createElement('label');
+          caseLabel.className = 'case-label';
+          caseLabel.textContent = 'Case Sensitive';
+          caseLabel.style.marginLeft = '5px';
+          caseLabel.style.fontSize = '14px';
+          
+          caseCheckboxWrapper.appendChild(caseCheckbox);
+          caseCheckContainer.appendChild(caseCheckboxWrapper);
+          caseCheckContainer.appendChild(caseLabel);
+          
+          // Remove button
+          const removeButton = document.createElement('button');
+          removeButton.is = 'emby-button';
+          removeButton.type = 'button';
+          removeButton.className = 'remove-button';
+          removeButton.innerHTML = '<span>✕</span>';
+          removeButton.style.flex = '0 0 auto';
+          removeButton.style.minWidth = '32px';
+          removeButton.style.height = '32px';
+          removeButton.style.padding = '0';
+          removeButton.style.borderRadius = '50%';
+          removeButton.onclick = function() {
+            container.remove();
+          };
+          
+          // Add all components
+          container.appendChild(collectionNameContainer);
+          container.appendChild(expressionContainer);
+          container.appendChild(caseCheckContainer);
+          container.appendChild(removeButton);
+          
+          return container;
+        }
+        
         function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
           const container = document.createElement('div');
           container.className = 'title-match-container';
@@ -273,18 +399,19 @@
           
           return container;
         }
-        
-        function loadConfig() {
+          function loadConfig() {
           window.ApiClient.getPluginConfiguration(
             "06ebf4a9-1326-4327-968d-8da00e1ea2eb"
           ) // Plugin Id
             .then(function (config) {
+              // Load simple collections
               const titleMatchPairsContainer = document.querySelector("#title-match-pairs");
               titleMatchPairsContainer.innerHTML = '';
                 
               // Check if we have the TitleMatchPairs property
               if (config.TitleMatchPairs && config.TitleMatchPairs.length > 0) {
-                config.TitleMatchPairs.forEach(pair => {                  // Convert MatchType enum string to numeric value for the dropdown
+                config.TitleMatchPairs.forEach(pair => {                  
+                  // Convert MatchType enum string to numeric value for the dropdown
                   let matchTypeValue = 0; // Default to Title
                   if (pair.MatchType !== undefined) {
                     switch (pair.MatchType) {
@@ -325,16 +452,57 @@
                 const element = createTitleMatchPairElement();
                 titleMatchPairsContainer.appendChild(element);
               }
+              
+              // Load expression collections
+              const expressionCollectionsContainer = document.querySelector("#expression-collections");
+              expressionCollectionsContainer.innerHTML = '';
+              
+              // Check if we have the ExpressionCollections property
+              if (config.ExpressionCollections && config.ExpressionCollections.length > 0) {
+                config.ExpressionCollections.forEach(collection => {
+                  const element = createExpressionCollectionElement(
+                    collection.Expression,
+                    collection.CollectionName,
+                    collection.CaseSensitive
+                  );
+                  expressionCollectionsContainer.appendChild(element);
+                });
+              } else {
+                // If no expression collections exist yet, add one empty row
+                const element = createExpressionCollectionElement();
+                expressionCollectionsContainer.appendChild(element);
+              }
             })
             .catch(function (error) {
               console.error(error);
-              // Add an empty row if there's an error
-              const element = createTitleMatchPairElement();
-              document.querySelector("#title-match-pairs").appendChild(element);
+              // Add empty rows if there's an error
+              const titleElement = createTitleMatchPairElement();
+              document.querySelector("#title-match-pairs").appendChild(titleElement);
+              
+              const expressionElement = createExpressionCollectionElement();
+              document.querySelector("#expression-collections").appendChild(expressionElement);
             });
-        }
+        }        function saveConfig() {
+          // Validate expressions before saving
+          let allExpressionContainers = document.querySelectorAll('.expression-container');
+          let hasErrors = false;
           
-        function saveConfig() {
+          allExpressionContainers.forEach(container => {
+            const expressionInput = container.querySelector('.expression-input');
+            if (expressionInput && expressionInput.value.trim()) {
+              const result = validateExpression(expressionInput.value);
+              if (!result.valid) {
+                hasErrors = true;
+                alert(`Expression error: ${result.error} in collection "${container.querySelector('.collection-name-input').value || 'Unnamed'}"`);
+              }
+            }
+          });
+          
+          if (hasErrors) {
+            return; // Don't save if there are validation errors
+          }
+          
+          // Process simple collections
           const titleMatchContainers = document.querySelectorAll('.title-match-container');
           const titleMatchPairs = [];
             
@@ -379,9 +547,26 @@
               });
             }
           });
+            // Process expression collections
+          const expressionCollections = [];
+          
+          allExpressionContainers.forEach(container => {
+            const expressionInput = container.querySelector('.expression-input');
+            const collectionNameInput = container.querySelector('.collection-name-input');
+            const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
+            
+            if (expressionInput.value.trim()) {
+              expressionCollections.push({
+                Expression: expressionInput.value.trim(),
+                CollectionName: collectionNameInput.value.trim() || "Expression Collection",
+                CaseSensitive: caseSensitiveCheckbox.checked
+              });
+            }
+          });
           
           const config = {
             TitleMatchPairs: titleMatchPairs,
+            ExpressionCollections: expressionCollections,
             // Keep these empty for backward compatibility
             TagTitlePairs: [],
             Tags: []
@@ -413,9 +598,7 @@
                 message: "Unexpected error occurred!"
               });
             });
-        }
-
-        // Initialize the page
+        }        // Initialize the page
         loadConfig();
         
         // Add event listeners
@@ -423,7 +606,88 @@
         document.querySelector("#add-title-match-button").addEventListener("click", function() {
           const element = createTitleMatchPairElement();
           document.querySelector("#title-match-pairs").appendChild(element);
+        });        document.querySelector("#add-expression-collection-button").addEventListener("click", function() {
+          const element = createExpressionCollectionElement();
+          document.querySelector("#expression-collections").appendChild(element);
+          // Setup validation for the new expression input
+          setupExpressionValidation();
         });
+        
+        // Setup validation for initial expression inputs
+        setupExpressionValidation();
+        
+        // Function to validate the expression syntax (simplified version)
+        function validateExpression(expressionText) {
+          if (!expressionText || expressionText.trim() === '') {
+            return { valid: false, error: "Expression cannot be empty" };
+          }
+          
+          // Simple validation - make sure quotes are properly paired
+          const quoteCount = (expressionText.match(/"/g) || []).length;
+          if (quoteCount % 2 !== 0) {
+            return { valid: false, error: "Mismatched quotes in expression" };
+          }
+          
+          // Check for balanced parentheses
+          const openParens = (expressionText.match(/\(/g) || []).length;
+          const closeParens = (expressionText.match(/\)/g) || []).length;
+          if (openParens !== closeParens) {
+            return { valid: false, error: "Mismatched parentheses in expression" };
+          }
+          
+          // Check for at least one criteria type
+          const criteriaTypes = ["TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR"];
+          let hasCriteria = false;
+          
+          for (const type of criteriaTypes) {
+            if (expressionText.toUpperCase().includes(type)) {
+              hasCriteria = true;
+              break;
+            }
+          }
+          
+          if (!hasCriteria) {
+            return { valid: false, error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, or DIRECTOR)" };
+          }
+          
+          return { valid: true };
+        }
+        
+        // Add real-time validation to expression inputs
+        function setupExpressionValidation() {
+          const expressionContainers = document.querySelectorAll('.expression-container');
+          
+          expressionContainers.forEach(container => {
+            const expressionInput = container.querySelector('.expression-input');
+            if (expressionInput) {
+              expressionInput.addEventListener('blur', function() {
+                const result = validateExpression(expressionInput.value);
+                
+                // Remove any existing error message
+                const existingError = container.querySelector('.expression-error');
+                if (existingError) {
+                  existingError.remove();
+                }
+                
+                // Add error message if validation failed
+                if (!result.valid) {
+                  const errorElement = document.createElement('div');
+                  errorElement.className = 'expression-error';
+                  errorElement.style.color = 'red';
+                  errorElement.style.fontSize = '0.9em';
+                  errorElement.style.marginTop = '5px';
+                  errorElement.textContent = result.error;
+                  
+                  // Insert after the expression input
+                  expressionInput.parentNode.appendChild(errorElement);
+                }
+              });
+            }
+          });
+        }
+        
+        // Initialize expression validation on load
+        setupExpressionValidation();
       </script>
     </div>
   </body>

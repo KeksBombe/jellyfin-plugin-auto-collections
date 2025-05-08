@@ -36,9 +36,7 @@ namespace Jellyfin.Plugin.AutoCollections
 
             // Initialize configuration with defaults only on first run
             InitializeConfigurationIfNeeded();
-        }
-
-        private void InitializeConfigurationIfNeeded()
+        }        private void InitializeConfigurationIfNeeded()
         {
             // Check if this is the first time the plugin is being loaded or if it's using the old config format
             bool needsInitialization = false;
@@ -49,7 +47,12 @@ namespace Jellyfin.Plugin.AutoCollections
                 needsInitialization = true;
             }
             
-            // Only add default collections if we need initialization
+            // Initialize ExpressionCollections if it's null (for users upgrading from older versions)
+            if (Configuration.ExpressionCollections == null)
+            {
+                Configuration.ExpressionCollections = new List<ExpressionCollection>();
+            }
+              // Only add default collections if we need initialization
             if (needsInitialization)
             {
                 // Add default collections for first-time users
@@ -63,10 +66,20 @@ namespace Jellyfin.Plugin.AutoCollections
                     new TitleMatchPair("Fast & Furious", "Fast & Furious Saga"),
                     new TitleMatchPair("Jurassic", "Jurassic Collection"),
                 };
+                
+                // Initialize the expression collections with some examples
+                Configuration.ExpressionCollections = new List<ExpressionCollection>
+                {
+                    new ExpressionCollection("Marvel Action", "STUDIO \"Marvel\" AND GENRE \"Action\"", false),
+                    new ExpressionCollection("Spielberg or Nolan", "DIRECTOR \"Spielberg\" OR DIRECTOR \"Nolan\"", false),
+                    new ExpressionCollection("Tom Hanks Dramas", "ACTOR \"Tom Hanks\" AND GENRE \"Drama\"", false)
+                };
 
                 // For backward compatibility (empty, as we're switching from tag-based to title-based)
+                #pragma warning disable CS0618
                 Configuration.TagTitlePairs = new List<TagTitlePair>();
                 Configuration.Tags = Array.Empty<string>();
+                #pragma warning restore CS0618
 
                 // Save the configuration with defaults
                 SaveConfiguration();
@@ -112,7 +125,7 @@ namespace Jellyfin.Plugin.AutoCollections
         public override string Name => "Auto Collections";
 
         public static Plugin Instance { get; private set; }        public override string Description
-            => "Enables creation of Auto Collections based on Title, Studio, or Genre with custom collection names";        
+            => "Enables creation of Auto Collections based on simple criteria or advanced boolean expressions with custom collection names";        
         
         private readonly Guid _id = new Guid("06ebf4a9-1326-4327-968d-8da00e1ea2eb");
         public override Guid Id => _id;

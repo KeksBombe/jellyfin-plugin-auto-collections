@@ -104,14 +104,13 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                 _ => $"{matchString} Movies" // Default for Title and any future types
             };
         }
-    }
-
-    public class PluginConfiguration : BasePluginConfiguration
+    }    public class PluginConfiguration : BasePluginConfiguration
     {
         public PluginConfiguration()
         {
             // Initialize with empty lists - defaults will be added by Plugin.cs only on first run
             TitleMatchPairs = new List<TitleMatchPair>();
+            ExpressionCollections = new List<ExpressionCollection>();
             
             // Keep these for backward compatibility but they won't be used
             TagTitlePairs = new List<TagTitlePair>();
@@ -119,6 +118,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         }
 
         public List<TitleMatchPair> TitleMatchPairs { get; set; }
+        
+        // New property for expression-based collections
+        public List<ExpressionCollection> ExpressionCollections { get; set; }
         
         // Keep these for backward compatibility but they won't be used
         [Obsolete("Use TitleMatchPairs instead")]

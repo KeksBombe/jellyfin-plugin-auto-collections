@@ -5,6 +5,7 @@
         "overview": "Enables creation of Auto Collections based on Tag",
         "description": "Enables creation of Auto Collections based on Tag",
         "owner": "KeksBombe",
+        "imageUrl": "https://raw.githubusercontent.com/KeksBombe/jellyfin-plugin-auto-collections/Jellyfin.Plugin.AutoCollections/Images/AutoCollectionImage.jpg",
         "category": "General",
         "versions": [
             {

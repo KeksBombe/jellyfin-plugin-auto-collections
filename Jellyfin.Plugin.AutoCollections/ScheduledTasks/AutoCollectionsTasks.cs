@@ -36,7 +36,7 @@ namespace Jellyfin.Plugin.AutoCollections.ScheduledTasks
             };
         }        public string Name => "Auto Collections";
         public string Key => "AutoCollections";
-        public string Description => "Enables creation of Auto Collections based on Title, Studio, or Genre";
+        public string Description => "Enables creation of Auto Collections based on simple criteria or advanced boolean expressions";
         public string Category => "Auto Collections";
     }
 }

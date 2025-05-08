@@ -339,15 +339,12 @@ namespace Jellyfin.Plugin.AutoCollections
                 Tags = new[] { "Autocollection" },
                 Name = name,
             }).Select(b => b as BoxSet).FirstOrDefault();
-        }
-
-        public async Task ExecuteAutoCollectionsNoProgress()
+        }        public async Task ExecuteAutoCollectionsNoProgress()
         {
             _logger.LogInformation("Performing ExecuteAutoCollections");
             
-            // Get title match pairs from configuration - this is the new approach
+            // Get title match pairs from configuration - this is the basic approach
             var titleMatchPairs = Plugin.Instance!.Configuration.TitleMatchPairs;
-
             _logger.LogInformation($"Starting execution of Auto collections for {titleMatchPairs.Count} title match pairs");
 
             foreach (var titleMatchPair in titleMatchPairs)
@@ -361,6 +358,25 @@ namespace Jellyfin.Plugin.AutoCollections
                 {
                     _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
                     // Continue with next title-match pair even if one fails
+                    continue;
+                }
+            }
+            
+            // Get expression collections - this is the advanced approach
+            var expressionCollections = Plugin.Instance!.Configuration.ExpressionCollections;
+            _logger.LogInformation($"Starting execution of Advanced collections for {expressionCollections.Count} expression collections");
+
+            foreach (var expressionCollection in expressionCollections)
+            {
+                try
+                {
+                    _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName}");
+                    await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
+                    // Continue with next expression collection even if one fails
                     continue;
                 }
             }
@@ -824,6 +840,187 @@ namespace Jellyfin.Plugin.AutoCollections
             }
             
             return result;
+        }
+
+        // Method to evaluate a criteria for a movie
+        private bool EvaluateMovieCriteria(Movie movie, Configuration.CriteriaType criteriaType, string value, bool caseSensitive)
+        {
+            StringComparison comparison = caseSensitive 
+                ? StringComparison.Ordinal 
+                : StringComparison.OrdinalIgnoreCase;
+                
+            switch (criteriaType)
+            {
+                case Configuration.CriteriaType.Title:
+                    return movie.Name?.Contains(value, comparison) == true;
+                    
+                case Configuration.CriteriaType.Genre:
+                    return movie.Genres != null && 
+                           movie.Genres.Any(g => g.Contains(value, comparison));
+                    
+                case Configuration.CriteriaType.Studio:
+                    return movie.Studios != null && 
+                           movie.Studios.Any(s => s.Contains(value, comparison));
+                    
+                case Configuration.CriteriaType.Actor:
+                    // Find matching actors for this movie using the existing method
+                    var matchingActorMovies = GetMoviesWithPerson(value, "Actor", caseSensitive);
+                    return matchingActorMovies.Any(m => m.Id == movie.Id);
+                    
+                case Configuration.CriteriaType.Director:
+                    // Find matching directors for this movie using the existing method
+                    var matchingDirectorMovies = GetMoviesWithPerson(value, "Director", caseSensitive);
+                    return matchingDirectorMovies.Any(m => m.Id == movie.Id);
+                    
+                default:
+                    return false;
+            }
+        }
+        
+        // Method to evaluate a criteria for a series
+        private bool EvaluateSeriesCriteria(Series series, Configuration.CriteriaType criteriaType, string value, bool caseSensitive)
+        {
+            StringComparison comparison = caseSensitive 
+                ? StringComparison.Ordinal 
+                : StringComparison.OrdinalIgnoreCase;
+                
+            switch (criteriaType)
+            {
+                case Configuration.CriteriaType.Title:
+                    return series.Name?.Contains(value, comparison) == true;
+                    
+                case Configuration.CriteriaType.Genre:
+                    return series.Genres != null && 
+                           series.Genres.Any(g => g.Contains(value, comparison));
+                    
+                case Configuration.CriteriaType.Studio:
+                    return series.Studios != null && 
+                           series.Studios.Any(s => s.Contains(value, comparison));
+                    
+                case Configuration.CriteriaType.Actor:
+                    // Find all series with matching actor name
+                    var actorSeries = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        IsVirtualItem = false,
+                        Recursive = true,
+                        Person = value,
+                        PersonTypes = new[] { "Actor" }
+                    }).OfType<Series>();
+                    
+                    return actorSeries.Any(s => s.Id == series.Id);
+                    
+                case Configuration.CriteriaType.Director:
+                    // Find all series with matching director name
+                    var directorSeries = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        IsVirtualItem = false,
+                        Recursive = true,
+                        Person = value,
+                        PersonTypes = new[] { "Director" }
+                    }).OfType<Series>();
+                    
+                    return directorSeries.Any(s => s.Id == series.Id);
+                    
+                default:
+                    return false;
+            }
+        }
+          // Process expression collections
+        private async Task ExecuteAutoCollectionsForExpressionCollection(Configuration.ExpressionCollection expressionCollection)
+        {
+            _logger.LogInformation("Processing expression collection: {CollectionName}", expressionCollection.CollectionName);
+            
+            // Always parse the expression when executing
+            if (!expressionCollection.ParseExpression())
+            {
+                _logger.LogError("Failed to parse expression for collection {CollectionName}: {Errors}", 
+                    expressionCollection.CollectionName, 
+                    string.Join("; ", expressionCollection.ParseErrors));
+                return;
+            }
+            
+            // Get or create the collection
+            var collectionName = expressionCollection.CollectionName;
+            var collection = GetBoxSetByName(collectionName);
+            bool isNewCollection = false;
+            
+            if (collection is null)
+            {
+                _logger.LogInformation("{Name} not found, creating.", collectionName);
+                collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
+                {
+                    Name = collectionName,
+                    IsLocked = true
+                });
+                collection.Tags = new[] { "Autocollection" };
+                isNewCollection = true;
+            }
+            collection.DisplayOrder = "Default";
+            
+            // Get all movies and series from the library
+            var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                IsVirtualItem = false,
+                Recursive = true
+            }).OfType<Movie>().ToList();
+            
+            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Series },
+                IsVirtualItem = false,
+                Recursive = true
+            }).OfType<Series>().ToList();
+            
+            _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to evaluate", 
+                allMovies.Count, allSeries.Count);
+            
+            // Filter movies and series based on the expression
+            var matchingMovies = new List<Movie>();
+            var matchingSeries = new List<Series>();
+            
+            if (expressionCollection.ParsedExpression != null)
+            {
+                matchingMovies = allMovies
+                    .Where(movie => movie != null)
+                    .Where(movie => 
+                    {
+                        return expressionCollection.ParsedExpression.Evaluate(
+                            (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
+                        );
+                    })
+                    .ToList();
+                    
+                matchingSeries = allSeries
+                    .Where(series => series != null)
+                    .Where(series => 
+                    {
+                        return expressionCollection.ParsedExpression.Evaluate(
+                            (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
+                        );
+                    })
+                    .ToList();
+            }
+            
+            _logger.LogInformation("Expression matched {MovieCount} movies and {SeriesCount} series", 
+                matchingMovies.Count, matchingSeries.Count);
+                
+            // Combine movies and series
+            var allMatchingItems = matchingMovies.Cast<BaseItem>()
+                .Concat(matchingSeries.Cast<BaseItem>())
+                .ToList();
+                
+            // Update the collection (add new items, remove items that no longer match)
+            await RemoveUnwantedMediaItems(collection, allMatchingItems);
+            await AddWantedMediaItems(collection, allMatchingItems);
+            
+            // Set collection image if it's a new collection
+            if (isNewCollection && allMatchingItems.Count > 0)
+            {
+                await SetPhotoForCollection(collection);
+            }
         }
     }
 }
