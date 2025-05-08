@@ -67,6 +67,9 @@ ACTOR "string" AND (GENRE "string" OR GENRE "another string")
 
 4. **Movies with complex criteria**:
    - `(TITLE "Star" AND GENRE "Sci-Fi") OR (STUDIO "Lucasfilm" AND NOT GENRE "Documentary")`
+  
+![image](https://github.com/user-attachments/assets/7b66c57d-6dd6-49eb-a64b-ac9d501c0395)
+
 
 Settings I use for 2x Collection by Title, 1x Studio, 1x Genre
 ![image](https://github.com/user-attachments/assets/8c44b541-3381-44df-9742-4c7b2d486403)
