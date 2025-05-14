@@ -665,7 +665,15 @@ namespace Jellyfin.Plugin.AutoCollections
                 _ => "title"
             };
             
-            _logger.LogInformation($"Performing ExecuteAutoCollections for {matchTypeText} match: {titleMatchPair.TitleMatch}");
+            string mediaTypeText = titleMatchPair.MediaType switch
+            {
+                Configuration.MediaTypeFilter.Movies => "movies only",
+                Configuration.MediaTypeFilter.Series => "shows only",
+                Configuration.MediaTypeFilter.All => "all media",
+                _ => "all media"
+            };
+            
+            _logger.LogInformation($"Performing ExecuteAutoCollections for {matchTypeText} match: {titleMatchPair.TitleMatch} (Media filter: {mediaTypeText})");
             
             // Get the collection name from the match pair
             var collectionName = titleMatchPair.CollectionName;
@@ -685,19 +693,50 @@ namespace Jellyfin.Plugin.AutoCollections
                 isNewCollection = true;
             }
             collection.DisplayOrder = "Default";
+              // Find all media items that match the pattern based on match type
+            List<Movie> allMovies = new();
+            List<Series> allSeries = new();
             
-            // Find all media items that match the pattern based on match type
-            var allMovies = GetMoviesFromLibraryByMatch(
-                titleMatchPair.TitleMatch, 
-                titleMatchPair.CaseSensitive, 
-                titleMatchPair.MatchType
-            ).ToList();
-            
-            var allSeries = GetSeriesFromLibraryByMatch(
-                titleMatchPair.TitleMatch, 
-                titleMatchPair.CaseSensitive, 
-                titleMatchPair.MatchType
-            ).ToList();
+            // Apply media type filter
+            switch (titleMatchPair.MediaType)
+            {
+                case Configuration.MediaTypeFilter.Movies:
+                    // Only include movies
+                    allMovies = GetMoviesFromLibraryByMatch(
+                        titleMatchPair.TitleMatch, 
+                        titleMatchPair.CaseSensitive, 
+                        titleMatchPair.MatchType
+                    ).ToList();
+                    _logger.LogInformation($"Media filter: Movies only - found {allMovies.Count} matching items");
+                    break;
+                    
+                case Configuration.MediaTypeFilter.Series:
+                    // Only include TV series
+                    allSeries = GetSeriesFromLibraryByMatch(
+                        titleMatchPair.TitleMatch, 
+                        titleMatchPair.CaseSensitive, 
+                        titleMatchPair.MatchType
+                    ).ToList();
+                    _logger.LogInformation($"Media filter: Series only - found {allSeries.Count} matching items");
+                    break;
+                    
+                case Configuration.MediaTypeFilter.All:
+                default:
+                    // Include both movies and series (default behavior)
+                    allMovies = GetMoviesFromLibraryByMatch(
+                        titleMatchPair.TitleMatch, 
+                        titleMatchPair.CaseSensitive, 
+                        titleMatchPair.MatchType
+                    ).ToList();
+                    
+                    allSeries = GetSeriesFromLibraryByMatch(
+                        titleMatchPair.TitleMatch, 
+                        titleMatchPair.CaseSensitive, 
+                        titleMatchPair.MatchType
+                    ).ToList();
+                    _logger.LogInformation($"Media filter: All - found {allMovies.Count} movies and {allSeries.Count} series");
+                    break;
+            }
             
             _logger.LogInformation($"Found {allMovies.Count} movies and {allSeries.Count} series matching {matchTypeText} pattern '{titleMatchPair.TitleMatch}' for collection: {collectionName}");
             
@@ -840,9 +879,7 @@ namespace Jellyfin.Plugin.AutoCollections
             }
             
             return result;
-        }
-
-        // Method to evaluate a criteria for a movie
+        }        // Method to evaluate a criteria for a movie
         private bool EvaluateMovieCriteria(Movie movie, Configuration.CriteriaType criteriaType, string value, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
@@ -871,6 +908,14 @@ namespace Jellyfin.Plugin.AutoCollections
                     // Find matching directors for this movie using the existing method
                     var matchingDirectorMovies = GetMoviesWithPerson(value, "Director", caseSensitive);
                     return matchingDirectorMovies.Any(m => m.Id == movie.Id);
+                    
+                case Configuration.CriteriaType.Movie:
+                    // Always true for movies
+                    return true;
+                    
+                case Configuration.CriteriaType.Show:
+                    // Always false for movies
+                    return false;
                     
                 default:
                     return false;
@@ -922,6 +967,14 @@ namespace Jellyfin.Plugin.AutoCollections
                     }).OfType<Series>();
                     
                     return directorSeries.Any(s => s.Id == series.Id);
+                    
+                case Configuration.CriteriaType.Movie:
+                    // Always false for series
+                    return false;
+                    
+                case Configuration.CriteriaType.Show:
+                    // Always true for series
+                    return true;
                     
                 default:
                     return false;

@@ -86,7 +86,7 @@
             </div>
             <div class="verticalSection">
               <div class="inputContainer">                <label class="inputLabel inputLabelUnfocused" for="title-match-pairs">Simple Collections:</label>
-                <div class="help-text">Create collections based on a simple string match. Select the type (Title, Studio, Genre, Actor, or Director), enter the string to match, and provide a collection name.</div>
+                <div class="help-text">Create collections based on a simple string match. Select the type (Title, Studio, Genre, Actor, or Director), choose media type (All, Movies, or Shows), enter the string to match, and provide a collection name.</div>
                 <div id="title-match-pairs"></div>
               </div>
               
@@ -106,7 +106,9 @@
                   Create collections using complex boolean expressions. Examples:<br>
                   <code>TITLE "Avengers"</code> - Items with "Avengers" in the title<br>
                   <code>STUDIO "Marvel" AND GENRE "Action"</code> - Marvel action items<br>
-                  <code>STUDIO "Marvel" AND (TITLE "Spiderman" OR ACTOR "Robert Downey JR.")</code> - Marvel items with Spiderman in the title or starring Robert Downey Jr.
+                  <code>STUDIO "Marvel" AND (TITLE "Spiderman" OR ACTOR "Robert Downey JR.")</code> - Marvel items with Spiderman in the title or starring Robert Downey Jr.<br>
+                  <code>GENRE "Action" AND MOVIE</code> - Action movies only (no TV shows)<br>
+                  <code>TITLE "Avengers" OR (GENRE "Action" AND SHOW)</code> - Anything with "Avengers" in the title, plus Action TV shows
                 </div>
                 <div id="expression-collections"></div>
               </div>
@@ -235,7 +237,7 @@
           return container;
         }
         
-        function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0) {
+        function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0, mediaType = 0) {
           const container = document.createElement('div');
           container.className = 'title-match-container';
           container.style.display = 'flex';
@@ -280,12 +282,48 @@
           
           matchTypeContainer.appendChild(matchTypeSelect);
           
-          // This ensures the Emby select component is properly initialized
+          // Create media type dropdown
+          const mediaTypeContainer = document.createElement('div');
+          mediaTypeContainer.className = 'media-type-container';
+          mediaTypeContainer.style.marginRight = '10px';
+          mediaTypeContainer.style.minWidth = '100px';
+          mediaTypeContainer.style.flex = '0 0 100px';
+          
+          const mediaTypeSelect = document.createElement('select');
+          mediaTypeSelect.is = 'emby-select';
+          mediaTypeSelect.className = 'media-type-select';
+          
+          // Add media type options
+          const mediaOptions = [
+            { value: '0', text: 'All' },
+            { value: '1', text: 'Movies' },
+            { value: '2', text: 'Shows' }
+          ];
+          
+          mediaOptions.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.text = opt.text;
+            mediaTypeSelect.appendChild(option);
+          });
+          
+          // Set the selected option based on mediaType parameter
+          if (mediaType !== undefined) {
+            mediaTypeSelect.value = mediaType.toString();
+          }
+          
+          mediaTypeContainer.appendChild(mediaTypeSelect);
+          
+          // This ensures the Emby select components are properly initialized
           setTimeout(() => {
             if (matchTypeSelect.embyInit) {
               matchTypeSelect.embyInit();
+            }
+            if (mediaTypeSelect.embyInit) {
+              mediaTypeSelect.embyInit();
             } else if (window.EmbyWebComponents && window.EmbyWebComponents.autoFocus) {
               window.EmbyWebComponents.autoFocus(matchTypeSelect.parentNode);
+              window.EmbyWebComponents.autoFocus(mediaTypeSelect.parentNode);
             }
           }, 0);
             
@@ -392,6 +430,7 @@
           
           // Add all components to container in order
           container.appendChild(matchTypeContainer);
+          container.appendChild(mediaTypeContainer); // Add media type dropdown
           container.appendChild(titleMatchContainer);
           container.appendChild(collectionNameContainer);
           container.appendChild(caseCheckContainer);
@@ -437,12 +476,34 @@
                         }
                     }
                   }
+
+                  // Convert MediaType enum to numeric value for the dropdown
+                  let mediaTypeValue = 0; // Default to All
+                  if (pair.MediaType !== undefined) {
+                    switch (pair.MediaType) {
+                      case "All":
+                        mediaTypeValue = 0;
+                        break;
+                      case "Movies":
+                        mediaTypeValue = 1;
+                        break;
+                      case "Series":
+                        mediaTypeValue = 2;
+                        break;
+                      // Fallback for numeric values (backward compatibility)
+                      default:
+                        if (typeof pair.MediaType === 'number') {
+                          mediaTypeValue = pair.MediaType;
+                        }
+                    }
+                  }
                   
                   const element = createTitleMatchPairElement(
                     pair.TitleMatch, 
                     pair.CollectionName, 
                     pair.CaseSensitive, 
-                    matchTypeValue
+                    matchTypeValue,
+                    mediaTypeValue
                   );
                   titleMatchPairsContainer.appendChild(element);
                 });
@@ -453,10 +514,12 @@
                 titleMatchPairsContainer.appendChild(element);
               }
               
+
               // Load expression collections
               const expressionCollectionsContainer = document.querySelector("#expression-collections");
               expressionCollectionsContainer.innerHTML = '';
               
+
               // Check if we have the ExpressionCollections property
               if (config.ExpressionCollections && config.ExpressionCollections.length > 0) {
                 config.ExpressionCollections.forEach(collection => {
@@ -512,6 +575,7 @@
             const collectionNameInput = container.querySelector('.collection-name-input');
             const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
             const matchTypeSelect = container.querySelector('.match-type-select');
+            const mediaTypeSelect = container.querySelector('.media-type-select');
               if (titleMatchInput.value.trim()) {
               const titleMatch = titleMatchInput.value.trim();
               const collectionName = collectionNameInput.value.trim();
@@ -539,11 +603,30 @@
                   matchTypeString = "Title";
               }
               
+
+              // Convert numeric value to enum string representation for media type
+              const mediaTypeValue = parseInt(mediaTypeSelect.value, 10);
+              let mediaTypeString;
+              switch (mediaTypeValue) {
+                case 0:
+                  mediaTypeString = "All";
+                  break;
+                case 1:
+                  mediaTypeString = "Movies";
+                  break;
+                case 2:
+                  mediaTypeString = "Series";
+                  break;
+                default:
+                  mediaTypeString = "All";
+              }
+              
               titleMatchPairs.push({
                 TitleMatch: titleMatch,
                 CollectionName: collectionName || null, // Use null if collection name is empty
                 CaseSensitive: caseSensitive,
-                MatchType: matchTypeString
+                MatchType: matchTypeString,
+                MediaType: mediaTypeString
               });
             }
           });
@@ -636,7 +719,7 @@
           }
           
           // Check for at least one criteria type
-          const criteriaTypes = ["TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR"];
+          const criteriaTypes = ["TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR", "MOVIE", "SHOW"];
           let hasCriteria = false;
           
           for (const type of criteriaTypes) {
@@ -647,7 +730,7 @@
           }
           
           if (!hasCriteria) {
-            return { valid: false, error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, or DIRECTOR)" };
+            return { valid: false, error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, or SHOW)" };
           }
           
           return { valid: true };
@@ -678,6 +761,7 @@
                   errorElement.style.marginTop = '5px';
                   errorElement.textContent = result.error;
                   
+
                   // Insert after the expression input
                   expressionInput.parentNode.appendChild(errorElement);
                 }

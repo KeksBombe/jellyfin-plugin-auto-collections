@@ -11,7 +11,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         Genre = 1,     // Match by genre
         Studio = 2,    // Match by studio
         Actor = 3,     // Match by actor
-        Director = 4   // Match by director
+        Director = 4,  // Match by director
+        Movie = 5,     // Match only movies
+        Show = 6       // Match only TV shows
     }
 
     // Token types for expression parsing
@@ -77,6 +79,11 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
 
         public override string ToString()
         {
+            // For media type criteria, don't include the value part
+            if (CriteriaType == CriteriaType.Movie || CriteriaType == CriteriaType.Show)
+            {
+                return $"{CriteriaType.ToString().ToUpper()}";
+            }
             return $"{CriteriaType.ToString().ToUpper()} \"{Value}\"";
         }
     }
@@ -268,6 +275,18 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     tokens.Add(directorToken);
                     continue;
                 }
+                
+                if (TryMatchCriteria(expression, ref position, "MOVIE", out var movieToken))
+                {
+                    tokens.Add(movieToken);
+                    continue;
+                }
+                
+                if (TryMatchCriteria(expression, ref position, "SHOW", out var showToken))
+                {
+                    tokens.Add(showToken);
+                    continue;
+                }
 
                 // Check for parentheses
                 if (expression[position] == '(')
@@ -346,18 +365,18 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             }
             
             return false;
-        }
-
-        private bool TryMatchCriteria(string expression, ref int position, string criteria, out Token token)
+        }        private bool TryMatchCriteria(string expression, ref int position, string criteria, out Token token)
         {
             token = null;
             
             if (position + criteria.Length <= expression.Length &&
                 expression.Substring(position, criteria.Length).Equals(criteria, StringComparison.OrdinalIgnoreCase))
             {
-                // Check if it's a whole word (followed by whitespace)
+                // Check if it's a whole word (followed by whitespace, parenthesis, or end of string)
                 if (position + criteria.Length == expression.Length || 
-                    char.IsWhiteSpace(expression[position + criteria.Length]))
+                    char.IsWhiteSpace(expression[position + criteria.Length]) ||
+                    expression[position + criteria.Length] == '(' ||
+                    expression[position + criteria.Length] == ')')
                 {
                     position += criteria.Length;
                     
@@ -379,6 +398,12 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                             break;
                         case "DIRECTOR":
                             token.CriteriaType = Configuration.CriteriaType.Director;
+                            break;
+                        case "MOVIE":
+                            token.CriteriaType = Configuration.CriteriaType.Movie;
+                            break;
+                        case "SHOW":
+                            token.CriteriaType = Configuration.CriteriaType.Show;
                             break;
                     }
                     
@@ -457,6 +482,12 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             if (tokens[position].Type == TokenType.Criteria)
             {
                 var criteriaToken = tokens[position++];
+                
+                // Special handling for MOVIE and SHOW criteria that don't require string values
+                if (criteriaToken.CriteriaType == CriteriaType.Movie || criteriaToken.CriteriaType == CriteriaType.Show)
+                {
+                    return new CriteriaNode(criteriaToken.CriteriaType.Value, string.Empty);
+                }
                 
                 if (position >= tokens.Count || tokens[position].Type != TokenType.String)
                     throw new Exception($"Expected string after {criteriaToken}");

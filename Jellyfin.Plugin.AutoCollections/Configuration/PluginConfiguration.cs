@@ -66,6 +66,14 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         Actor = 3,   // Match by actor
         Director = 4 // Match by director
     }
+    
+    // Media types for filtering collections
+    public enum MediaTypeFilter
+    {
+        All = 0,    // Include all media types (default)
+        Movies = 1,  // Only include movies
+        Series = 2   // Only include TV series
+    }
 
     // Class for match-based collections (previously title-based only)
     public class TitleMatchPair
@@ -74,6 +82,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         public string CollectionName { get; set; }
         public bool CaseSensitive { get; set; }
         public MatchType MatchType { get; set; }
+        public MediaTypeFilter MediaType { get; set; }
 
         // Add parameterless constructor for XML serialization
         public TitleMatchPair()
@@ -82,14 +91,17 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             CollectionName = "Auto Collection";
             CaseSensitive = false; // Default to case insensitive
             MatchType = MatchType.Title; // Default to title matching for backward compatibility
+            MediaType = MediaTypeFilter.All; // Default to include all media types
         }
 
-        public TitleMatchPair(string titleMatch, string collectionName = null, bool caseSensitive = false, MatchType matchType = MatchType.Title)
+        public TitleMatchPair(string titleMatch, string collectionName = null, bool caseSensitive = false, 
+                              MatchType matchType = MatchType.Title, MediaTypeFilter mediaType = MediaTypeFilter.All)
         {
             TitleMatch = titleMatch;
             CollectionName = collectionName ?? GetDefaultCollectionName(titleMatch, matchType);
             CaseSensitive = caseSensitive;
             MatchType = matchType;
+            MediaType = mediaType;
         }        private static string GetDefaultCollectionName(string matchString, MatchType matchType)
         {
             if (string.IsNullOrEmpty(matchString))

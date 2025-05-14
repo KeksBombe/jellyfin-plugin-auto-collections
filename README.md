@@ -18,7 +18,9 @@ The original plugin by johnpc allowed users to:
 ### What This Enhanced Version Does
 
 This fork extends the original functionality with:
-- **Multiple Matching Methods**: Match content by Title, Studio, or Genre (not Tags if you want tags use the original)
+- **Multiple Matching Methods**: Match content by Title, Studio, Genre, Actor, or Director
+- **Media Type Filtering**: Filter collections to include only movies, only TV shows, or both
+- **Advanced Expression Support**: Create complex collections using boolean expressions (AND, OR, NOT)
 - **Flexible Matching**: More options to create diverse and useful collections
 - **Extensible Code**: Structured for easy addition of future matching types
 
@@ -34,42 +36,14 @@ With this enhanced version, you can:
 
 3. **Genre-based Collections**: Organize content by genre
    - Example: Match "Thriller" to create a dedicated Thriller collection
+   
+4. **Media Type Filtering**: Separate movies from TV shows
+   - Example: Match "Action" genre but only include movies, not TV shows
+
+5. **Advanced Collections**: Create collections using boolean expressions
+   - Example: `STUDIO "Marvel" AND (GENRE "Action" OR ACTOR "Robert Downey Jr.")`
 
 The Auto Collections are kept up to date each time the task runs, automatically adding or removing items as they match or no longer match your criteria.
-
-## Advanced Expression-based Collections
-
-For power users, this plugin also supports advanced expression-based collections using a simple query language:
-
-- **Boolean Operators**: Combine criteria using AND, OR, NOT and parentheses
-- **Multiple Criteria Types**: TITLE, GENRE, STUDIO, ACTOR, DIRECTOR
-- **Complex Rules**: Create sophisticated collection rules with advanced logic
-
-### Expression Syntax
-
-```
-TITLE "string" AND GENRE "string"
-STUDIO "string" OR STUDIO "another string" 
-NOT DIRECTOR "string"
-ACTOR "string" AND (GENRE "string" OR GENRE "another string")
-```
-
-### Examples
-
-1. **Movies with a specific actor in a specific genre**:
-   - `ACTOR "Tom Hanks" AND GENRE "Drama"`
-
-2. **Movies from either of two studios**:
-   - `STUDIO "Warner Bros." OR STUDIO "Universal Pictures"`
-
-3. **Movies by a director but excluding a specific genre**:
-   - `DIRECTOR "Christopher Nolan" AND NOT GENRE "Horror"`
-
-4. **Movies with complex criteria**:
-   - `(TITLE "Star" AND GENRE "Sci-Fi") OR (STUDIO "Lucasfilm" AND NOT GENRE "Documentary")`
-  
-![image](https://github.com/user-attachments/assets/7b66c57d-6dd6-49eb-a64b-ac9d501c0395)
-
 
 Settings I use for 2x Collection by Title, 1x Studio, 1x Genre
 ![image](https://github.com/user-attachments/assets/8c44b541-3381-44df-9742-4c7b2d486403)
@@ -100,11 +74,12 @@ This project does not use or distribute any copyrighted media content.
 
 ## User Guide
 
-### Basic Collections
+### Simple Collections
 
 1. To set it up, visit `Dashboard -> Plugins -> My Plugins -> Auto Collections`
 2. For each auto collection you want to create:
-   - Select the match type (Title, Studio, or Genre) from the dropdown
+   - Select the match type (Title, Studio, Genre, Actor, or Director) from the dropdown
+   - Select the media type (All, Movies, or Shows) from the dropdown
    - Enter the string to match
    - Provide a custom collection name (optional)
    - Choose whether the match should be case-sensitive (optional)
@@ -112,20 +87,29 @@ This project does not use or distribute any copyrighted media content.
 4. Click "Sync Auto Collections" to update your collections immediately
 5. Your Collections now exist!
 
-### Expression-based Collections
+### Advanced Collections
 
-1. In the Auto Collections plugin settings, scroll to the "Expression Collections" section
-2. Click "Add Expression Collection"
-3. Enter:
-   - Collection Name: What you want your collection to be called
-   - Expression: Create your complex query using the syntax described above
-   - Case Sensitive: Toggle if you want case-sensitive matching
-4. Click "Save"
-5. Click "Sync Auto Collections" to update your collections
+For more complex collections, you can use the Advanced Collections feature:
 
-Example: To create a collection of Christopher Nolan sci-fi films:
-- Collection Name: "Nolan Sci-Fi"
-- Expression: `DIRECTOR "Christopher Nolan" AND GENRE "Sci-Fi"`
+1. In the Auto Collections settings, scroll to the "Advanced Collections" section
+2. For each advanced collection:
+   - Enter a collection name
+   - Create an expression using the following syntax:
+     - `TITLE "text"` - Match items with "text" in the title
+     - `GENRE "name"` - Match items with "name" genre
+     - `STUDIO "name"` - Match items from "name" studio
+     - `ACTOR "name"` - Match items with "name" actor
+     - `DIRECTOR "name"` - Match items with "name" director
+     - `MOVIE` - Match only movies
+     - `SHOW` - Match only TV shows
+     - Combine with `AND`, `OR`, `NOT`, and parentheses
+   - Choose whether the matches should be case-sensitive (optional)
+3. Click "Save" and then "Sync Auto Collections"
+
+Example expressions:
+- `TITLE "Star Wars" AND MOVIE` - Only Star Wars movies
+- `GENRE "Comedy" AND SHOW` - Only comedy TV shows
+- `STUDIO "Marvel" AND (MOVIE OR ACTOR "Chris Evans")` - Marvel movies or anything with Chris Evans
 
 Note: The Auto Collections Sync task is also available in your Scheduled Tasks section and runs automatically every 24 hours.
 
