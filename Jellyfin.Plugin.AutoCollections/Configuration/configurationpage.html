@@ -96,19 +96,50 @@
                 type="button"
                 class="raised add-title-match-button"
               >
-                <span>Add Simple Collection</span>              </button>
+                <span>Add Simple Collection</span>              </button>              <div style="margin: 20px 0 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: rgba(0,0,0,0.03);">
+                <h3 style="margin-top: 0; margin-bottom: 10px;">Import/Export Configuration</h3>
+                <p style="margin-bottom: 15px; font-size: 0.9em; color: #555;">
+                  Export your current configuration to a JSON file or import a configuration from a JSON file.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                  <button id="export-config-btn" is="emby-button" type="button" class="raised button-submit">
+                    <span>Export Filter Config (JSON)</span>
+                  </button>
+                  <div style="display: flex; align-items: center;">
+                    <label for="import-config-input" style="margin: 0; display: flex;">
+                      <div is="emby-button" class="raised button-submit" style="display: inline-block; cursor: pointer; height: 100%; box-sizing: border-box;">
+                        <span>Import Filter Config (JSON)</span>
+                      </div>
+                      <input id="import-config-input" type="file" accept="application/json" style="display:none;" />
+                    </label>
+                  </div>
+                </div>
+                <div id="import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+              </div>
 
               <div class="section-divider"></div>
               
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="expression-collections">Advanced Collections:</label>
-                <div class="help-text">
+                <label class="inputLabel inputLabelUnfocused" for="expression-collections">Advanced Collections:</label>                <div class="help-text">
                   Create collections using complex boolean expressions. Examples:<br>
                   <code>TITLE "Avengers"</code> - Items with "Avengers" in the title<br>
                   <code>STUDIO "Marvel" AND GENRE "Action"</code> - Marvel action items<br>
                   <code>STUDIO "Marvel" AND (TITLE "Spiderman" OR ACTOR "Robert Downey JR.")</code> - Marvel items with Spiderman in the title or starring Robert Downey Jr.<br>
                   <code>GENRE "Action" AND MOVIE</code> - Action movies only (no TV shows)<br>
-                  <code>TITLE "Avengers" OR (GENRE "Action" AND SHOW)</code> - Anything with "Avengers" in the title, plus Action TV shows
+                  <code>TITLE "Avengers" OR (GENRE "Action" AND SHOW)</code> - Anything with "Avengers" in the title, plus Action TV shows<br>
+                  <br>
+                  <strong>New Filter Types:</strong><br>
+                  <code>TAG "Family" AND MOVIE</code> - Movies with the "Family" tag<br>
+                  <code>PARENTALRATING "PG-13" AND GENRE "Horror"</code> - PG-13 horror content<br>
+                  <code>COMMUNITYRATING ">8.5"</code> - Items rated above 8.5<br>
+                  <code>CRITICSRATING ">75" AND GENRE "Drama"</code> - Well-reviewed dramas<br>
+                  <code>PRODUCTIONLOCATION "Germany" OR PRODUCTIONLOCATION "Austria"</code> - German or Austrian content<br>
+                  <br>
+                  <strong>Language Filters:</strong><br>
+                  <code>LANG "eng" AND MOVIE</code> - Movies with English audio<br>
+                  <code>SUB "eng" AND MOVIE</code> - Movies with English subtitles<br>
+                  <code>MOVIE AND (LANG "eng" OR SUB "eng")</code> - Movies with either English audio or subtitles<br>
+                  <code>MOVIE AND LANG "fra" AND NOT SUB "eng"</code> - French audio movies without English subtitles
                 </div>
                 <div id="expression-collections"></div>
               </div>
@@ -717,9 +748,12 @@
           if (openParens !== closeParens) {
             return { valid: false, error: "Mismatched parentheses in expression" };
           }
-          
-          // Check for at least one criteria type
-          const criteriaTypes = ["TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR", "MOVIE", "SHOW"];
+            // Check for at least one criteria type
+            const criteriaTypes = [
+            "TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR", "MOVIE", "SHOW",
+            "TAG", "PARENTALRATING", "RATING", "COMMUNITYRATING", "CRITICSRATING",
+            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB"
+          ];
           let hasCriteria = false;
           
           for (const type of criteriaTypes) {
@@ -727,10 +761,11 @@
               hasCriteria = true;
               break;
             }
-          }
-          
-          if (!hasCriteria) {
-            return { valid: false, error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, or SHOW)" };
+          }            if (!hasCriteria) {
+            return { 
+              valid: false, 
+              error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, SHOW, TAG, PARENTALRATING, COMMUNITYRATING, CRITICSRATING, PRODUCTIONLOCATION, LANG, SUB)" 
+            };
           }
           
           return { valid: true };
@@ -772,6 +807,99 @@
         
         // Initialize expression validation on load
         setupExpressionValidation();
+        // Export config logic
+        document.getElementById('export-config-btn').addEventListener('click', function() {
+          fetch('/AutoCollections/Export', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+          })
+          .then(response => {
+            if (!response.ok) throw new Error('Failed to export configuration');
+            return response.blob();
+          })
+          .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'auto-collections-config.json';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(err => { alert('Export failed: ' + err.message); });
+        });        // Import config logic
+        document.getElementById('import-config-input').addEventListener('change', function(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          
+          // Check if file is JSON
+          if (!file.name.toLowerCase().endsWith('.json') && file.type !== 'application/json') {
+            alert('Please select a JSON file');
+            return;
+          }
+          
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            let jsonContent = e.target.result;
+            
+            // Try to preprocess and validate the JSON
+            try {
+              // Simple comment removal for // style comments
+              jsonContent = jsonContent.replace(/\/\/.*$/gm, '');
+              
+              // Try to parse the JSON to make sure it's valid
+              JSON.parse(jsonContent);
+                // Show importing status
+              const statusEl = document.getElementById('import-status');
+              statusEl.textContent = "Importing configuration...";
+              statusEl.style.color = "#00529B";
+              
+              // If parsing succeeds, send to the server
+              fetch('/AutoCollections/Import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: jsonContent
+              })
+              .then(response => {
+                if (!response.ok && !response.headers.get('content-type')?.includes('application/json')) {
+                  // If not JSON response and not successful, just show the status
+                  throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                
+                // Try to parse response as JSON, fall back to text if that fails
+                return response.json()
+                  .catch(() => response.text().then(text => ({ 
+                    message: text,
+                    ok: response.ok
+                  })));
+              })              .then(data => {
+                const statusEl = document.getElementById('import-status');
+                
+                if (data.ok || data.Success) {
+                  statusEl.textContent = "Configuration imported successfully. Reloading page...";
+                  statusEl.style.color = "#4F8A10";
+                  setTimeout(() => window.location.reload(), 1500);
+                } else {
+                  // Show error message - look for message in various possible locations
+                  const errorMessage = data.message || data.Message || data.error || data.Error || 'Unknown error';
+                  statusEl.textContent = 'Import failed: ' + errorMessage;
+                  statusEl.style.color = "#D8000C";
+                }
+              })
+              .catch(err => { 
+                console.error(err);
+                const statusEl = document.getElementById('import-status');
+                statusEl.textContent = 'Import failed: ' + err.message;
+                statusEl.style.color = "#D8000C";
+              });            } catch (err) {
+              const statusEl = document.getElementById('import-status');
+              statusEl.textContent = 'Invalid JSON file: ' + err.message;
+              statusEl.style.color = "#D8000C";
+            }
+          };
+          reader.readAsText(file);
+        });
       </script>
     </div>
   </body>
