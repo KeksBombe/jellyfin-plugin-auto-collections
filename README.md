@@ -182,6 +182,21 @@ For community and critics ratings in Advanced Collections, you can use compariso
 - `COMMUNITYRATING "=7"` - Exactly 7
 - `COMMUNITYRATING "7"` - Exactly 7 (equals sign is optional)
 
+### Numeric Year Filtering
+
+For filtering by production year in Advanced Collections:
+- `YEAR ">2000"` - Content released after 2000
+- `YEAR ">=1990"` - Content from 1990 and later
+- `YEAR "<2000"` - Content released before 2000
+- `YEAR "<=1989"` - Content from 1989 and earlier
+- `YEAR "=2020"` - Content from exactly 2020
+- `YEAR "2020"` - Content from exactly 2020 (equals sign is optional)
+
+For year ranges (like a decade), use multiple YEAR filters connected with AND:
+- `YEAR ">=2000" AND YEAR "<=2010"` - Content from the 2000s decade
+
+Note: Using a syntax like `YEAR ">=2000 AND <=2010"` will not work as expected. Always use separate YEAR expressions for ranges.
+
 ### Useful Advanced Expression Examples
 
 - **Recent High-Quality Movies**: `MOVIE AND COMMUNITYRATING ">7.5" AND CRITICSRATING ">70"`

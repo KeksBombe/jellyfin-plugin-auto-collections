@@ -81,7 +81,7 @@
                 is="emby-linkbutton"
                 class="raised button-alt headerHelpButton emby-button"
                 target="_blank"
-                href="https://github.com/johnpc/jellyfin-plugin-Auto-collections"
+                href="https://github.com/KeksBombe/jellyfin-plugin-auto-collections/blob/main/README.md"
               >Help</a>
             </div>
             <div class="verticalSection">
@@ -103,16 +103,16 @@
                 </p>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                   <button id="export-config-btn" is="emby-button" type="button" class="raised button-submit">
-                    <span>Export Filter Config (JSON)</span>
+                    <span>Export Config (JSON)</span>
                   </button>
-                  <div style="display: flex; align-items: center;">
-                    <label for="import-config-input" style="margin: 0; display: flex;">
-                      <div is="emby-button" class="raised button-submit" style="display: inline-block; cursor: pointer; height: 100%; box-sizing: border-box;">
-                        <span>Import Filter Config (JSON)</span>
-                      </div>
-                      <input id="import-config-input" type="file" accept="application/json" style="display:none;" />
-                    </label>
-                  </div>
+                  <button id="import-overwrite-config-btn" is="emby-button" type="button" class="raised button-submit">
+                    <span>Import Config (Overwrite)</span>
+                  </button>
+                  <input id="import-overwrite-config-input" type="file" accept="application/json" style="display:none;" />
+                  <button id="import-add-config-btn" is="emby-button" type="button" class="raised button-submit">
+                    <span>Import Config (Merge)</span>
+                  </button>
+                  <input id="import-add-config-input" type="file" accept="application/json" style="display:none;" />
                 </div>
                 <div id="import-status" style="margin-top: 10px; font-size: 0.9em;"></div>
               </div>
@@ -120,7 +120,8 @@
               <div class="section-divider"></div>
               
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="expression-collections">Advanced Collections:</label>                <div class="help-text">
+                <label class="inputLabel inputLabelUnfocused" for="expression-collections">Advanced Collections:</label>
+                <div class="help-text">
                   Create collections using complex boolean expressions. Examples:<br>
                   <code>TITLE "Avengers"</code> - Items with "Avengers" in the title<br>
                   <code>STUDIO "Marvel" AND GENRE "Action"</code> - Marvel action items<br>
@@ -131,9 +132,14 @@
                   <strong>New Filter Types:</strong><br>
                   <code>TAG "Family" AND MOVIE</code> - Movies with the "Family" tag<br>
                   <code>PARENTALRATING "PG-13" AND GENRE "Horror"</code> - PG-13 horror content<br>
-                  <code>COMMUNITYRATING ">8.5"</code> - Items rated above 8.5<br>
-                  <code>CRITICSRATING ">75" AND GENRE "Drama"</code> - Well-reviewed dramas<br>
+                  <code>COMMUNITYRATING ">8.5"</code> - Items rated above 8.5<br>                  <code>CRITICSRATING ">75" AND GENRE "Drama"</code> - Well-reviewed dramas<br>
                   <code>PRODUCTIONLOCATION "Germany" OR PRODUCTIONLOCATION "Austria"</code> - German or Austrian content<br>
+                  <br>
+                  <strong>Year Filters:</strong><br>                  <code>YEAR "&lt;2000"</code> - Content from before 2000<br>
+                  <code>YEAR "&gt;2010"</code> - Content from after 2010<br>
+                  <code>YEAR "=1994"</code> - Content from exactly 1994<br>
+                  <code>YEAR "&gt;=2000" AND YEAR "&lt;=2010"</code> - Content from the 2000s decade<br>
+                  <code>GENRE "Sci-Fi" AND YEAR "&gt;=2000" AND YEAR "&lt;=2010"</code> - Sci-Fi from the 2000s decade
                   <br>
                   <strong>Language Filters:</strong><br>
                   <code>LANG "eng" AND MOVIE</code> - Movies with English audio<br>
@@ -752,7 +758,7 @@
             const criteriaTypes = [
             "TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR", "MOVIE", "SHOW",
             "TAG", "PARENTALRATING", "RATING", "COMMUNITYRATING", "CRITICSRATING",
-            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB"
+            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB", "YEAR"
           ];
           let hasCriteria = false;
           
@@ -764,7 +770,7 @@
           }            if (!hasCriteria) {
             return { 
               valid: false, 
-              error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, SHOW, TAG, PARENTALRATING, COMMUNITYRATING, CRITICSRATING, PRODUCTIONLOCATION, LANG, SUB)" 
+              error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, SHOW, TAG, PARENTALRATING, COMMUNITYRATING, CRITICSRATING, PRODUCTIONLOCATION, LANG, SUB, YEAR)" 
             };
           }
           
@@ -807,14 +813,18 @@
         
         // Initialize expression validation on load
         setupExpressionValidation();
+
         // Export config logic
         document.getElementById('export-config-btn').addEventListener('click', function() {
-          fetch('/AutoCollections/Export', {
+          fetch(ApiClient.getUrl('AutoCollections/ExportConfiguration'), { // Use ApiClient.getUrl and add auth
             method: 'GET',
-            headers: { 'Accept': 'application/json' }
+            headers: { 
+              'Accept': 'application/json',
+              'X-MediaBrowser-Token': ApiClient.accessToken()
+            }
           })
           .then(response => {
-            if (!response.ok) throw new Error('Failed to export configuration');
+            if (!response.ok) throw new Error('Failed to export configuration: ' + response.statusText);
             return response.blob();
           })
           .then(blob => {
@@ -826,80 +836,102 @@
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
+            document.getElementById('import-status').textContent = 'Configuration exported successfully.';
+            document.getElementById('import-status').style.color = "#4F8A10";
           })
-          .catch(err => { alert('Export failed: ' + err.message); });
-        });        // Import config logic
-        document.getElementById('import-config-input').addEventListener('change', function(event) {
+          .catch(err => { 
+            document.getElementById('import-status').textContent = 'Export failed: ' + err.message;
+            document.getElementById('import-status').style.color = "#D8000C";
+            console.error(err); 
+          });
+        });
+
+        // Import overwrite config logic
+        document.getElementById('import-overwrite-config-btn').addEventListener('click', function() {
+          document.getElementById('import-overwrite-config-input').click();
+        });
+
+        document.getElementById('import-overwrite-config-input').addEventListener('change', function(event) {
+          handleImportFile(event, 'AutoCollections/ImportConfiguration', 'overwrite');
+        });
+
+        // Import add/merge config logic
+        document.getElementById('import-add-config-btn').addEventListener('click', function() {
+          document.getElementById('import-add-config-input').click();
+        });
+
+        document.getElementById('import-add-config-input').addEventListener('change', function(event) {
+          handleImportFile(event, 'AutoCollections/AddConfiguration', 'merge');
+        });
+
+        function handleImportFile(event, endpoint, mode) {
           const file = event.target.files[0];
+          const statusEl = document.getElementById('import-status');
           if (!file) return;
-          
-          // Check if file is JSON
+
           if (!file.name.toLowerCase().endsWith('.json') && file.type !== 'application/json') {
-            alert('Please select a JSON file');
+            statusEl.textContent = 'Please select a JSON file.';
+            statusEl.style.color = "#D8000C";
+            event.target.value = null; // Reset file input
             return;
           }
-          
+
           const reader = new FileReader();
           reader.onload = function(e) {
             let jsonContent = e.target.result;
-            
-            // Try to preprocess and validate the JSON
             try {
               // Simple comment removal for // style comments
               jsonContent = jsonContent.replace(/\/\/.*$/gm, '');
-              
-              // Try to parse the JSON to make sure it's valid
-              JSON.parse(jsonContent);
-                // Show importing status
-              const statusEl = document.getElementById('import-status');
-              statusEl.textContent = "Importing configuration...";
+              JSON.parse(jsonContent); // Validate JSON
+
+              statusEl.textContent = `Importing and ${mode === 'overwrite' ? 'overwriting' : 'merging'} configuration...`;
               statusEl.style.color = "#00529B";
-              
-              // If parsing succeeds, send to the server
-              fetch('/AutoCollections/Import', {
+
+              fetch(ApiClient.getUrl(endpoint), { // Pass endpoint directly to ApiClient.getUrl
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'X-MediaBrowser-Token': ApiClient.accessToken()
+                },
                 body: jsonContent
               })
               .then(response => {
-                if (!response.ok && !response.headers.get('content-type')?.includes('application/json')) {
-                  // If not JSON response and not successful, just show the status
-                  throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                if (response.status === 204) { // No Content is a success
+                  return { ok: true, message: `Configuration ${mode}d successfully.` };
                 }
-                
-                // Try to parse response as JSON, fall back to text if that fails
-                return response.json()
-                  .catch(() => response.text().then(text => ({ 
-                    message: text,
-                    ok: response.ok
-                  })));
-              })              .then(data => {
-                const statusEl = document.getElementById('import-status');
-                
-                if (data.ok || data.Success) {
-                  statusEl.textContent = "Configuration imported successfully. Reloading page...";
+                // Check if the response is not OK and not JSON, then throw an error with text content
+                if (!response.ok && !response.headers.get('content-type')?.includes('application/json')) {
+                  return response.text().then(text => { throw new Error(`Server returned ${response.status}: ${text || response.statusText}`); });
+                }
+                // Otherwise, try to parse as JSON, or fall back to text if JSON parsing fails
+                return response.json().catch(() => response.text().then(text => ({ message: text, ok: response.ok, status: response.status })));
+              })
+              .then(data => {
+                // Check for various success conditions
+                if (data.ok || (data.status && data.status >= 200 && data.status < 300) || data.Success) {
+                  statusEl.textContent = `Configuration ${mode}d successfully. Reloading page...`;
                   statusEl.style.color = "#4F8A10";
                   setTimeout(() => window.location.reload(), 1500);
                 } else {
-                  // Show error message - look for message in various possible locations
-                  const errorMessage = data.message || data.Message || data.error || data.Error || 'Unknown error';
-                  statusEl.textContent = 'Import failed: ' + errorMessage;
+                  const errorMessage = data.message || data.Message || data.error || data.Error || 'Unknown error during import.';
+                  statusEl.textContent = `Import (${mode}) failed: ${errorMessage}`;
                   statusEl.style.color = "#D8000C";
                 }
               })
-              .catch(err => { 
+              .catch(err => {
                 console.error(err);
-                const statusEl = document.getElementById('import-status');
-                statusEl.textContent = 'Import failed: ' + err.message;
+                statusEl.textContent = `Import (${mode}) failed: ${err.message}`;
                 statusEl.style.color = "#D8000C";
-              });            } catch (err) {
-              const statusEl = document.getElementById('import-status');
+              });
+            } catch (err) {
               statusEl.textContent = 'Invalid JSON file: ' + err.message;
               statusEl.style.color = "#D8000C";
+            } finally {
+                event.target.value = null; // Reset file input
             }
           };
           reader.readAsText(file);
-        });
+        }
       </script>
     </div>
   </body>

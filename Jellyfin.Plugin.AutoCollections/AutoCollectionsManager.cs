@@ -940,10 +940,16 @@ namespace Jellyfin.Plugin.AutoCollections
                                 stream.Type == MediaBrowser.Model.Entities.MediaStreamType.Subtitle && 
                                 !string.IsNullOrEmpty(stream.Language) && 
                                 stream.Language.Contains(value, comparison));
-                
-                case Configuration.CriteriaType.ProductionLocation:
+                  case Configuration.CriteriaType.ProductionLocation:
                     return movie.ProductionLocations != null && 
                            movie.ProductionLocations.Any(l => l.Contains(value, comparison));
+                           
+                case Configuration.CriteriaType.Year:
+                    if (movie.ProductionYear.HasValue)
+                    {
+                        return CompareNumericValue(movie.ProductionYear.Value, value);
+                    }
+                    return false;
                     
                 default:
                     return false;
@@ -1055,8 +1061,18 @@ namespace Jellyfin.Plugin.AutoCollections
                                 !string.IsNullOrEmpty(stream.Language) && 
                                 stream.Language.Contains(value, comparison)))
                         {
-                            return true;
-                        }
+                            return true;                        }
+                    }
+                    return false;
+                    
+                case Configuration.CriteriaType.ProductionLocation:
+                    return series.ProductionLocations != null && 
+                           series.ProductionLocations.Any(l => l.Contains(value, comparison));
+                           
+                case Configuration.CriteriaType.Year:
+                    if (series.ProductionYear.HasValue)
+                    {
+                        return CompareNumericValue(series.ProductionYear.Value, value);
                     }
                     return false;
                     

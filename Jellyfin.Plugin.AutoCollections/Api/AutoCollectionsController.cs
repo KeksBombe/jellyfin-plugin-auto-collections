@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.IO;
 using System.Threading.Tasks;
 using System;
+using System.Collections.Generic;
 using Jellyfin.Plugin.AutoCollections.Configuration;
 using System.Text.Json.Serialization;
 
@@ -62,7 +63,7 @@ namespace Jellyfin.Plugin.AutoCollections.Api
         /// </summary>
         /// <response code="200">Returns the configuration as a JSON file.</response>
         /// <returns>A <see cref="FileContentResult"/> containing the configuration.</returns>
-        [HttpGet("Export")]
+        [HttpGet("ExportConfiguration")] // Changed route
         [ProducesResponseType(StatusCodes.Status200OK)]
         [Produces("application/json")]
         public ActionResult ExportConfiguration()
@@ -71,6 +72,13 @@ namespace Jellyfin.Plugin.AutoCollections.Api
             
             // Get the current plugin configuration
             var config = Plugin.Instance!.Configuration;
+
+            // Create an anonymous object with only the desired properties
+            var exportData = new
+            {
+                TitleMatchPairs = config.TitleMatchPairs,
+                ExpressionCollections = config.ExpressionCollections
+            };
             
             var options = new JsonSerializerOptions
             {
@@ -78,7 +86,7 @@ namespace Jellyfin.Plugin.AutoCollections.Api
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
             
-            var json = JsonSerializer.Serialize(config, options);
+            var json = JsonSerializer.Serialize(exportData, options); // Serialize the anonymous object
             
             // Return as a downloadable file
             return File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", "auto-collections-config.json");
@@ -90,11 +98,11 @@ namespace Jellyfin.Plugin.AutoCollections.Api
         /// <response code="200">Configuration imported successfully.</response>
         /// <response code="400">Invalid configuration file.</response>
         /// <returns>A <see cref="IActionResult"/> indicating success or failure.</returns>
-        [HttpPost("Import")]
+        [HttpPost("ImportConfiguration")] // Changed route
         [Consumes("application/json")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> ImportConfiguration()
+        public async Task<IActionResult> ImportConfiguration() // This is the OVERWRITE method
         {
             _logger.LogInformation("Importing Auto Collections configuration");
             
@@ -158,10 +166,99 @@ namespace Jellyfin.Plugin.AutoCollections.Api
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error importing configuration");                return BadRequest($"Error importing configuration: {ex.Message}");
+                _logger.LogError(ex, "Error importing configuration");
+                return BadRequest(new { Message = $"Error importing configuration: {ex.Message}" }); // Return object for consistency
             }
         }
-        
+
+        /// <summary>
+        /// Adds (merges) Auto Collections configuration from JSON to the existing configuration.
+        /// </summary>
+        /// <response code="200">Configuration added successfully.</response>
+        /// <response code="400">Invalid configuration file or error during merge.</response>
+        /// <returns>A <see cref="IActionResult"/> indicating success or failure.</returns>
+        [HttpPost("AddConfiguration")]
+        [Consumes("application/json")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> AddConfiguration()
+        {
+            _logger.LogInformation("Adding Auto Collections configuration (merge)");
+
+            try
+            {
+                using var reader = new StreamReader(Request.Body);
+                var json = await reader.ReadToEndAsync();
+                json = RemoveJsonComments(json);
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    AllowTrailingCommas = true
+                };
+
+                var configToAdd = JsonSerializer.Deserialize<PluginConfiguration>(json, options);
+
+                if (configToAdd == null)
+                {
+                    return BadRequest(new { Message = "Invalid configuration file for merging." });
+                }
+
+                var currentConfig = Plugin.Instance!.Configuration;
+
+                // Merge TitleMatchPairs
+                if (configToAdd.TitleMatchPairs != null)
+                {
+                    if (currentConfig.TitleMatchPairs == null)
+                    {
+                        currentConfig.TitleMatchPairs = new List<TitleMatchPair>();
+                    }
+                    // Simple AddRange, consider duplicate handling if necessary in future
+                    currentConfig.TitleMatchPairs.AddRange(configToAdd.TitleMatchPairs);
+                    _logger.LogInformation($"Added {configToAdd.TitleMatchPairs.Count} TitleMatchPairs.");
+                }
+
+                // Merge ExpressionCollections
+                if (configToAdd.ExpressionCollections != null)
+                {
+                    if (currentConfig.ExpressionCollections == null)
+                    {
+                        currentConfig.ExpressionCollections = new List<ExpressionCollection>();
+                    }
+                    foreach (var collection in configToAdd.ExpressionCollections)
+                    {
+                        // Common typo fixes & validation during merge
+                        collection.Expression = collection.Expression
+                            .Replace("TITEL", "TITLE")
+                            .Replace("GENERE", "GENRE");
+                        
+                        bool isValid = collection.ParseExpression();
+                        if (!isValid && collection.ParseErrors.Count > 0)
+                        {
+                            _logger.LogWarning($"Expression errors in merged collection '{collection.CollectionName}': {string.Join(", ", collection.ParseErrors)}");
+                        }
+                    }
+                    currentConfig.ExpressionCollections.AddRange(configToAdd.ExpressionCollections);
+                    _logger.LogInformation($"Added {configToAdd.ExpressionCollections.Count} ExpressionCollections.");
+                }
+
+                Plugin.Instance.SaveConfiguration();
+
+                _logger.LogInformation("Configuration added (merged) successfully");
+                return Ok(new { Success = true, Message = "Configuration added successfully" });
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Error deserializing configuration for merging");
+                return BadRequest(new { Message = $"Invalid JSON format for merging: {ex.Message}" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding configuration");
+                return BadRequest(new { Message = $"Error adding configuration: {ex.Message}" });
+            }
+        }
+
         private string RemoveJsonComments(string json)
         {
             // Remove single-line comments (// ...)
