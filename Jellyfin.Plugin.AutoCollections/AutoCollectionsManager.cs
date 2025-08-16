@@ -298,7 +298,7 @@ namespace Jellyfin.Plugin.AutoCollections
 
             // Get current items and filter for unwanted ones
             var childrenToRemove = collection.GetLinkedChildren()
-                .Where(item => !wantedItemIds.Contains(item.Id))
+                // .Where(item => !wantedItemIds.Contains(item.Id)) // Remove all items in the collection because we want to sort by premiere date when adding wanted items to the collection
                 .Select(item => item.Id)
                 .ToArray();
 
@@ -314,11 +314,12 @@ namespace Jellyfin.Plugin.AutoCollections
             // Get the set of IDs for items currently in the collection
             var existingItemIds = collection.GetLinkedChildren()
                 .Select(item => item.Id)
-                .ToHashSet();
+                .ToHashSet();            
 
             // Create LinkedChild objects for items that aren't already in the collection
             var childrenToAdd = wantedMediaItems
                 .Where(item => !existingItemIds.Contains(item.Id))
+                .OrderByDescending(item => item.PremiereDate ?? DateTime.MinValue)
                 .Select(item => item.Id)
                 .ToArray();
 
