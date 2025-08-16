@@ -319,6 +319,7 @@ namespace Jellyfin.Plugin.AutoCollections
             // Create LinkedChild objects for items that aren't already in the collection
             var childrenToAdd = wantedMediaItems
                 .Where(item => !existingItemIds.Contains(item.Id))
+                .OrderByDescending(item => item.Year)
                 .OrderByDescending(item => item.PremiereDate ?? DateTime.MinValue)
                 .Select(item => item.Id)
                 .ToArray();
