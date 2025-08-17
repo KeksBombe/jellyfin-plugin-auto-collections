@@ -298,7 +298,7 @@ namespace Jellyfin.Plugin.AutoCollections
 
             // Get current items and filter for unwanted ones
             var childrenToRemove = collection.GetLinkedChildren()
-                // .Where(item => !wantedItemIds.Contains(item.Id)) // Remove all items in the collection because we want to sort by premiere date when adding wanted items to the collection
+                .Where(item => !wantedItemIds.Contains(item.Id))
                 .Select(item => item.Id)
                 .ToArray();
 
@@ -328,6 +328,80 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 _logger.LogInformation($"Adding {childrenToAdd.Length} items to collection {collection.Name}");
                 await _collectionManager.AddToCollectionAsync(collection.Id, childrenToAdd).ConfigureAwait(true);
+            }
+        }
+
+        private async Task SortCollectionBy(BoxSet collection, SortOrder sortOrder)
+        {
+            // Get the current items in the collection
+            var currentItems = collection.GetLinkedChildren().ToList();
+
+            if (currentItems.Count <= 1)
+            {
+                // No need to sort if there's 0 or 1 item
+                return;
+            }
+
+            // Sort the items based on the sort order
+            var sortedItems =
+                sortOrder == SortOrder.Ascending
+                    ? currentItems
+                        .OrderBy(item => item.ProductionYear)
+                        .ThenBy(item => item.PremiereDate ?? DateTime.MinValue)
+                        .ToList()
+                    : currentItems
+                        .OrderByDescending(item => item.ProductionYear)
+                        .ThenByDescending(item => item.PremiereDate ?? DateTime.MinValue)
+                        .ToList();
+
+            // Find the first index where items differ
+            int firstDifferenceIndex = -1;
+            for (int i = 0; i < currentItems.Count; i++)
+            {
+                if (currentItems[i].Id != sortedItems[i].Id)
+                {
+                    firstDifferenceIndex = i;
+                    break;
+                }
+            }
+
+            // If no differences found, collection is already sorted
+            if (firstDifferenceIndex == -1)
+            {
+                _logger.LogDebug($"Collection {collection.Name} is already sorted");
+                return;
+            }
+
+            // Remove items from the first difference index onwards
+            var itemsToRemove = currentItems
+                .Skip(firstDifferenceIndex)
+                .Select(item => item.Id)
+                .ToArray();
+
+            if (itemsToRemove.Length > 0)
+            {
+                _logger.LogInformation(
+                    $"Removing {itemsToRemove.Length} items from collection {collection.Name} for re-sorting"
+                );
+                await _collectionManager
+                    .RemoveFromCollectionAsync(collection.Id, itemsToRemove)
+                    .ConfigureAwait(true);
+            }
+
+            // Add back the sorted items from the first difference index
+            var itemsToAdd = sortedItems
+                .Skip(firstDifferenceIndex)
+                .Select(item => item.Id)
+                .ToArray();
+
+            if (itemsToAdd.Length > 0)
+            {
+                _logger.LogInformation(
+                    $"Adding {itemsToAdd.Length} sorted items back to collection {collection.Name}"
+                );
+                await _collectionManager
+                    .AddToCollectionAsync(collection.Id, itemsToAdd)
+                    .ConfigureAwait(true);
             }
         }
 
@@ -645,6 +719,7 @@ namespace Jellyfin.Plugin.AutoCollections
 
             await RemoveUnwantedMediaItems(collection, mediaItems);
             await AddWantedMediaItems(collection, mediaItems);
+            await SortCollectionBy(collection, SortOrder.Descending);
             
             // Only set the photo for the collection if it's newly created
             if (isNewCollection)
@@ -746,6 +821,7 @@ namespace Jellyfin.Plugin.AutoCollections
 
             await RemoveUnwantedMediaItems(collection, mediaItems);
             await AddWantedMediaItems(collection, mediaItems);
+            await SortCollectionBy(collection, SortOrder.Descending);
             
             // Only set the photo for the collection if it's newly created
             if (isNewCollection && mediaItems.Count > 0)
@@ -1170,6 +1246,7 @@ namespace Jellyfin.Plugin.AutoCollections
             // Update the collection (add new items, remove items that no longer match)
             await RemoveUnwantedMediaItems(collection, allMatchingItems);
             await AddWantedMediaItems(collection, allMatchingItems);
+            await SortCollectionBy(collection, SortOrder.Descending);
             
             // Set collection image if it's a new collection
             if (isNewCollection && allMatchingItems.Count > 0)
