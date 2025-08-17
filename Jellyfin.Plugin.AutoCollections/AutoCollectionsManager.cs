@@ -1028,6 +1028,19 @@ namespace Jellyfin.Plugin.AutoCollections
                         return CompareNumericValue(movie.ProductionYear.Value, value);
                     }
                     return false;
+                case Configuration.CriteriaType.CustomRating:
+                    if (!string.IsNullOrWhiteSpace(movie.CustomRating))
+                    {
+                        if (value.StartsWith(">") || value.StartsWith("<") || value.StartsWith("=") || float.TryParse(value, out _))
+                        {
+                            if (float.TryParse(movie.CustomRating, out var actualNumeric))
+                            {
+                                return CompareNumericValue(actualNumeric, value);
+                            }
+                        }
+                        return movie.CustomRating.Contains(value, comparison);
+                    }
+                    return false;
                     
                 default:
                     return false;
@@ -1151,6 +1164,19 @@ namespace Jellyfin.Plugin.AutoCollections
                     if (series.ProductionYear.HasValue)
                     {
                         return CompareNumericValue(series.ProductionYear.Value, value);
+                    }
+                    return false;
+                case Configuration.CriteriaType.CustomRating:
+                    if (!string.IsNullOrWhiteSpace(series.CustomRating))
+                    {
+                        if (value.StartsWith(">") || value.StartsWith("<") || value.StartsWith("=") || float.TryParse(value, out _))
+                        {
+                            if (float.TryParse(series.CustomRating, out var actualNumeric))
+                            {
+                                return CompareNumericValue(actualNumeric, value);
+                            }
+                        }
+                        return series.CustomRating.Contains(value, comparison);
                     }
                     return false;
                     

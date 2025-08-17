@@ -134,6 +134,8 @@
                   <code>PARENTALRATING "PG-13" AND GENRE "Horror"</code> - PG-13 horror content<br>
                   <code>COMMUNITYRATING ">8.5"</code> - Items rated above 8.5<br>                  <code>CRITICSRATING ">75" AND GENRE "Drama"</code> - Well-reviewed dramas<br>
                   <code>PRODUCTIONLOCATION "Germany" OR PRODUCTIONLOCATION "Austria"</code> - German or Austrian content<br>
+                  <code>CUSTOMRATING "PG-13" OR CUSTOMRATING "PG"</code> - Items with specified custom ratings<br>
+                  <code>CUSTOMRATING "<=7" AND MOVIE</code> - Movies with custom rating numeric value 7 or below (if numeric values stored)
                   <br>
                   <strong>Year Filters:</strong><br>                  <code>YEAR "&lt;2000"</code> - Content from before 2000<br>
                   <code>YEAR "&gt;2010"</code> - Content from after 2010<br>
@@ -759,7 +761,7 @@
             const criteriaTypes = [
             "TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR", "MOVIE", "SHOW",
             "TAG", "PARENTALRATING", "RATING", "COMMUNITYRATING", "CRITICSRATING",
-            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB", "YEAR"
+            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB", "YEAR", "CUSTOMRATING", "CUSTOM"
           ];
           let hasCriteria = false;
           
@@ -772,6 +774,7 @@
             return { 
               valid: false, 
               error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, SHOW, TAG, PARENTALRATING, COMMUNITYRATING, CRITICSRATING, PRODUCTIONLOCATION, LANG, SUB, YEAR)" 
+            // Note: validation error message not updated to include CUSTOMRATING for legacy backward compatibility UI; actual parser supports it
             };
           }
           

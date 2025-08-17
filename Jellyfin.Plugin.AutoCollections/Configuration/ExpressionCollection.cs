@@ -21,7 +21,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         ProductionLocation = 11, // Match by production country/location
         AudioLanguage = 12, // Match by audio language
         Subtitle = 13, // Match by subtitle language
-        Year = 14      // Match by production/release year
+    Year = 14,      // Match by production/release year
+    CustomRating = 15 // Match by custom rating (user-provided override)
     }
 
     // Token types for expression parsing
@@ -379,6 +380,18 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     tokens.Add(yearToken);
                     continue;
                 }
+                
+                // Custom rating criteria (user-provided override rating)
+                if (TryMatchCriteria(expression, ref position, "CUSTOMRATING", out var customRatingToken))
+                {
+                    tokens.Add(customRatingToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "CUSTOM", out var customToken))
+                {
+                    tokens.Add(customToken);
+                    continue;
+                }
 
                 // Check for parentheses
                 if (expression[position] == '(')
@@ -525,6 +538,10 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                             break;
                         case "YEAR":
                             token.CriteriaType = Configuration.CriteriaType.Year;
+                            break;
+                        case "CUSTOMRATING":
+                        case "CUSTOM":
+                            token.CriteriaType = Configuration.CriteriaType.CustomRating;
                             break;
                     }
                     
