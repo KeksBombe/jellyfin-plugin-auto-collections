@@ -38,13 +38,34 @@ namespace Jellyfin.Plugin.AutoCollections
             InitializeConfigurationIfNeeded();
         }        private void InitializeConfigurationIfNeeded()
         {
-            // Check if this is the first time the plugin is being loaded or if it's using the old config format
+            // First, attempt any necessary migration from old tag-based system
+            AttemptMigrationFromTags();
+            
+            // Check if this is the first time the plugin is being loaded
             bool needsInitialization = false;
             
-            // Check if we have any title match pairs configured
-            if (Configuration.TitleMatchPairs == null || Configuration.TitleMatchPairs.Count == 0)
+            // For existing installations that don't have the IsInitialized flag,
+            // we need to determine if they had configurations before
+            if (!Configuration.IsInitialized)
             {
-                needsInitialization = true;
+                // If we have existing TitleMatchPairs or ExpressionCollections, 
+                // this is likely an existing installation - mark as initialized without adding defaults
+                bool hasExistingConfig = (Configuration.TitleMatchPairs != null && Configuration.TitleMatchPairs.Count > 0) ||
+                                        (Configuration.ExpressionCollections != null && Configuration.ExpressionCollections.Count > 0) ||
+                                        (Configuration.TagTitlePairs != null && Configuration.TagTitlePairs.Count > 0) ||
+                                        (Configuration.Tags != null && Configuration.Tags.Length > 0);
+                
+                if (hasExistingConfig)
+                {
+                    // This is an existing installation, just mark as initialized
+                    Configuration.IsInitialized = true;
+                    SaveConfiguration();
+                }
+                else
+                {
+                    // This is a truly new installation
+                    needsInitialization = true;
+                }
             }
             
             // Initialize ExpressionCollections if it's null (for users upgrading from older versions)
@@ -81,6 +102,9 @@ namespace Jellyfin.Plugin.AutoCollections
                 Configuration.Tags = Array.Empty<string>();
                 #pragma warning restore CS0618
 
+                // Mark as initialized to prevent future resets
+                Configuration.IsInitialized = true;
+
                 // Save the configuration with defaults
                 SaveConfiguration();
             }
@@ -92,6 +116,8 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 Configuration.TitleMatchPairs = new List<TitleMatchPair>();
             }
+            
+            bool migrationPerformed = false;
             
             // If we have old TagTitlePairs, convert them to TitleMatchPairs
             // This is more of a placeholder since direct conversion doesn't make sense,
@@ -109,6 +135,7 @@ namespace Jellyfin.Plugin.AutoCollections
                         
                     Configuration.TitleMatchPairs.Add(titleMatch);
                 }
+                migrationPerformed = true;
             }
             // If we only have old Tags, convert them too
             else if (Configuration.Tags != null && Configuration.Tags.Length > 0)
@@ -118,6 +145,14 @@ namespace Jellyfin.Plugin.AutoCollections
                     var titleMatch = new TitleMatchPair(tag);
                     Configuration.TitleMatchPairs.Add(titleMatch);
                 }
+                migrationPerformed = true;
+            }
+            
+            // If we performed migration, mark as initialized and save
+            if (migrationPerformed)
+            {
+                Configuration.IsInitialized = true;
+                SaveConfiguration();
             }
             #pragma warning restore CS0618
         }

@@ -127,12 +127,19 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             // Keep these for backward compatibility but they won't be used
             TagTitlePairs = new List<TagTitlePair>();
             Tags = new string[0];
+            
+            // Flag to track if configuration has been initialized to prevent resetting user's intentional empty collections
+            IsInitialized = false;
         }
 
         public List<TitleMatchPair> TitleMatchPairs { get; set; }
         
         // New property for expression-based collections
         public List<ExpressionCollection> ExpressionCollections { get; set; }
+        
+        // Flag to indicate whether the configuration has been properly initialized
+        // This prevents resetting the config when users intentionally have empty TitleMatchPairs
+        public bool IsInitialized { get; set; }
         
         // Keep these for backward compatibility but they won't be used
         [Obsolete("Use TitleMatchPairs instead")]
