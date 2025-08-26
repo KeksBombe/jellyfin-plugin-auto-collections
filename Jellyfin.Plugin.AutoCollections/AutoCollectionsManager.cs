@@ -714,8 +714,7 @@ namespace Jellyfin.Plugin.AutoCollections
             
             _logger.LogInformation($"Processing {allMovies.Count} movies and {allSeries.Count} series total for collection: {collectionName}");
             
-            var mediaItems = allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>())
-                .ToList();
+            var mediaItems = DedupeMediaItems(allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>()).ToList());
 
             await RemoveUnwantedMediaItems(collection, mediaItems);
             await AddWantedMediaItems(collection, mediaItems);
@@ -817,7 +816,7 @@ namespace Jellyfin.Plugin.AutoCollections
             
             _logger.LogInformation($"Found {allMovies.Count} movies and {allSeries.Count} series matching {matchTypeText} pattern '{titleMatchPair.TitleMatch}' for collection: {collectionName}");
             
-            var mediaItems = allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>()).ToList();
+            var mediaItems = DedupeMediaItems(allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>()).ToList());
 
             await RemoveUnwantedMediaItems(collection, mediaItems);
             await AddWantedMediaItems(collection, mediaItems);
@@ -1239,10 +1238,8 @@ namespace Jellyfin.Plugin.AutoCollections
                 matchingMovies.Count, matchingSeries.Count);
                 
             // Combine movies and series
-            var allMatchingItems = matchingMovies.Cast<BaseItem>()
-                .Concat(matchingSeries.Cast<BaseItem>())
-                .ToList();
-                
+            var allMatchingItems = DedupeMediaItems(matchingMovies.Cast<BaseItem>().Concat(matchingSeries.Cast<BaseItem>()).ToList());         
+
             // Update the collection (add new items, remove items that no longer match)
             await RemoveUnwantedMediaItems(collection, allMatchingItems);
             await AddWantedMediaItems(collection, allMatchingItems);
@@ -1254,6 +1251,18 @@ namespace Jellyfin.Plugin.AutoCollections
                 await SetPhotoForCollection(collection);
             }
         }
+        
+        private List<BaseItem> DedupeMediaItems(List<BaseItem> mediaItems)
+        {
+            var withoutDateOrTitle = mediaItems.Where(i => !i.PremiereDate.HasValue || string.IsNullOrWhiteSpace(i.Name)).ToList();
+            var uniqueItems = mediaItems
+                .Where(i => !string.IsNullOrWhiteSpace(i.Name) && i.PremiereDate.HasValue)
+                .GroupBy(i => new { Title = i.Name.Trim().ToLowerInvariant(), Date = i.PremiereDate.Value })
+                .Select(g => g.First()).ToList();
+
+            return uniqueItems.Concat(withoutDateOrTitle).ToList();
+        }
+        
           // Helper method to handle numeric comparisons for ratings
         private bool CompareNumericValue(float? actualValue, string targetValueString)
         {
