@@ -23,6 +23,7 @@ This fork extends the original functionality with:
   - Filter by ratings (parental ratings, community ratings, critics ratings)
   - Filter by production locations/countries
   - Filter by audio language and subtitle language
+   - Filter by user-defined custom rating (Jellyfin's CustomRating field)
 
 - **Boolean Logic**: Combine multiple criteria with AND, OR, NOT operators and parentheses grouping
 - **Import/Export**: Easily backup and restore your collection configurations as JSON
@@ -57,6 +58,10 @@ With this enhanced version, you can:
 
 8. **Critics Rating Collections**: Group by critics ratings
    - Example: `CRITICSRATING ">75"` for critically acclaimed content
+
+8b. **Custom Rating Collections**: Use Jellyfin's CustomRating field (user-supplied)
+   - Example: `CUSTOMRATING "PG-13" OR CUSTOMRATING "PG"`
+   - Example: `CUSTOMRATING "<=7" AND MOVIE` (when you store numeric suitability values like Common Sense Media ages)
 
 9. **Geographic Collections**: Group by production location
    - Example: `PRODUCTIONLOCATION "France"` for French productions
@@ -152,6 +157,7 @@ Advanced Collections provide much more powerful filtering capabilities with bool
      - `PARENTALRATING "rating"` - Match items with specific parental rating (e.g., "PG-13", "R")
      - `COMMUNITYRATING "value"` - Match items by community rating (supports comparison operators)
      - `CRITICSRATING "value"` - Match items by critics rating (supports comparison operators)
+   - `CUSTOMRATING "value"` - Match by custom rating (string match or numeric comparisons if numeric)
 
      **Media Type Filters:**
      - `MOVIE` - Match only movies
@@ -181,6 +187,10 @@ For community and critics ratings in Advanced Collections, you can use compariso
 - `COMMUNITYRATING "<6"` - Less than 6
 - `COMMUNITYRATING "=7"` - Exactly 7
 - `COMMUNITYRATING "7"` - Exactly 7 (equals sign is optional)
+
+For custom rating (if you store numeric values, e.g. child age suitability):
+- `CUSTOMRATING "<=7"` - Items whose custom rating numeric value is 7 or below
+- Numeric comparison works only if the item's CustomRating field parses to a number; otherwise it falls back to substring matching.
 
 ### Numeric Year Filtering
 
