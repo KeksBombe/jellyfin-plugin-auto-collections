@@ -1040,6 +1040,9 @@ namespace Jellyfin.Plugin.AutoCollections
                         return movie.CustomRating.Contains(value, comparison);
                     }
                     return false;
+
+                case Configuration.CriteriaType.Filename:
+                    return !string.IsNullOrEmpty(movie.Path) && movie.Path.Contains(value, comparison);
                     
                 default:
                     return false;
@@ -1176,6 +1179,23 @@ namespace Jellyfin.Plugin.AutoCollections
                             }
                         }
                         return series.CustomRating.Contains(value, comparison);
+                    }
+                    return false;
+
+                case Configuration.CriteriaType.Filename:
+                    var episodesForFilename = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        AncestorIds = new[] { series.Id },
+                        IncludeItemTypes = new[] { BaseItemKind.Episode },
+                        Recursive = true
+                    });
+
+                    foreach (var episode in episodesForFilename)
+                    {
+                        if (!string.IsNullOrEmpty(episode.Path) && episode.Path.Contains(value, comparison))
+                        {
+                            return true;
+                        }
                     }
                     return false;
                     

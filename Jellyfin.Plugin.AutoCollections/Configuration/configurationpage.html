@@ -124,6 +124,7 @@
                 <div class="help-text">
                   Create collections using complex boolean expressions. Examples:<br>
                   <code>TITLE "Avengers"</code> - Items with "Avengers" in the title<br>
+                  <code>FILENAME "REMUX"</code> - Items with "REMUX" in the filename<br>
                   <code>STUDIO "Marvel" AND GENRE "Action"</code> - Marvel action items<br>
                   <code>STUDIO "Marvel" AND (TITLE "Spiderman" OR ACTOR "Robert Downey JR.")</code> - Marvel items with Spiderman in the title or starring Robert Downey Jr.<br>
                   <code>GENRE "Action" AND MOVIE</code> - Action movies only (no TV shows)<br>
@@ -761,7 +762,7 @@
             const criteriaTypes = [
             "TITLE", "GENRE", "STUDIO", "ACTOR", "DIRECTOR", "MOVIE", "SHOW",
             "TAG", "PARENTALRATING", "RATING", "COMMUNITYRATING", "CRITICSRATING",
-            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB", "YEAR", "CUSTOMRATING", "CUSTOM"
+            "PRODUCTIONLOCATION", "LOCATION", "COUNTRY", "LANG", "SUB", "YEAR", "CUSTOMRATING", "CUSTOM", "FILENAME"
           ];
           let hasCriteria = false;
           
@@ -773,7 +774,7 @@
           }            if (!hasCriteria) {
             return { 
               valid: false, 
-              error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, SHOW, TAG, PARENTALRATING, COMMUNITYRATING, CRITICSRATING, PRODUCTIONLOCATION, LANG, SUB, YEAR)" 
+              error: "Expression must contain at least one criteria (TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, MOVIE, SHOW, TAG, PARENTALRATING, COMMUNITYRATING, CRITICSRATING, PRODUCTIONLOCATION, LANG, SUB, YEAR, FILENAME)" 
             // Note: validation error message not updated to include CUSTOMRATING for legacy backward compatibility UI; actual parser supports it
             };
           }

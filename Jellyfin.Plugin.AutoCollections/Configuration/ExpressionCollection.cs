@@ -22,7 +22,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         AudioLanguage = 12, // Match by audio language
         Subtitle = 13, // Match by subtitle language
     Year = 14,      // Match by production/release year
-    CustomRating = 15 // Match by custom rating (user-provided override)
+    CustomRating = 15, // Match by custom rating (user-provided override)
+    Filename = 16 // Match by filename
     }
 
     // Token types for expression parsing
@@ -393,6 +394,12 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     continue;
                 }
 
+                if (TryMatchCriteria(expression, ref position, "FILENAME", out var filenameToken))
+                {
+                    tokens.Add(filenameToken);
+                    continue;
+                }
+
                 // Check for parentheses
                 if (expression[position] == '(')
                 {
@@ -542,6 +549,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                         case "CUSTOMRATING":
                         case "CUSTOM":
                             token.CriteriaType = Configuration.CriteriaType.CustomRating;
+                            break;
+                        case "FILENAME":
+                            token.CriteriaType = Configuration.CriteriaType.Filename;
                             break;
                     }
                     
