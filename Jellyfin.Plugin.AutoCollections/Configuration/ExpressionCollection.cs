@@ -7,14 +7,14 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
     // Types of criteria for collections
     public enum CriteriaType
     {
-        Title = 0,     // Match by title
-        Genre = 1,     // Match by genre
-        Studio = 2,    // Match by studio
-        Actor = 3,     // Match by actor
-        Director = 4,  // Match by director
-        Movie = 5,     // Match only movies
-        Show = 6,      // Match only TV shows
-        Tag = 7,       // Match by tag
+        Title = 0,      // Match by title
+        Genre = 1,      // Match by genre
+        Studio = 2,     // Match by studio
+        Actor = 3,      // Match by actor
+        Director = 4,   // Match by director
+        Movie = 5,      // Match only movies
+        Show = 6,       // Match only TV shows
+        Tag = 7,        // Match by tag
         ParentalRating = 8, // Match by parental rating (e.g., PG-13, R)
         CommunityRating = 9, // Match by community rating (0-10)
         CriticsRating = 10, // Match by critics rating
@@ -26,8 +26,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         ReleaseDate = 16, // Match by release date with day-based comparisons
         AddedDate = 17,   // Match by date added to library with day-based comparisons
         EpisodeAirDate = 18, // Match by most recent episode air date (for TV shows)
-        Unplayed = 19,   // Match unplayed items (not watched by any user)
-        Watched = 20     // Match watched items (played by at least one user)
+        Unplayed = 19,  // Match unplayed items (not watched by any user)
+        Watched = 20,   // Match watched items (played by at least one user)
+        Filename = 21   // Match by filename
     }
 
     // Token types for expression parsing
@@ -174,11 +175,11 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         public string CollectionName { get; set; }
         public string Expression { get; set; }
         public bool CaseSensitive { get; set; }
-        
+
         // Make ParsedExpression and ParseErrors non-serializable
         [System.Xml.Serialization.XmlIgnore]
         public ExpressionNode ParsedExpression { get; set; }
-        
+
         [System.Xml.Serialization.XmlIgnore]
         public List<string> ParseErrors { get; set; }
 
@@ -197,7 +198,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             Expression = expression;
             CaseSensitive = caseSensitive;
             ParseErrors = new List<string>();
-            
+
             // Parse expression when created
             ParseExpression();
         }
@@ -247,13 +248,13 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     tokens.Add(andToken);
                     continue;
                 }
-                
+
                 if (TryMatchOperator(expression, ref position, "OR", out var orToken))
                 {
                     tokens.Add(orToken);
                     continue;
                 }
-                
+
                 if (TryMatchOperator(expression, ref position, "NOT", out var notToken))
                 {
                     tokens.Add(notToken);
@@ -266,127 +267,127 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     tokens.Add(titleToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "GENRE", out var genreToken))
                 {
                     tokens.Add(genreToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "STUDIO", out var studioToken))
                 {
                     tokens.Add(studioToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "ACTOR", out var actorToken))
                 {
                     tokens.Add(actorToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "DIRECTOR", out var directorToken))
                 {
                     tokens.Add(directorToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "MOVIE", out var movieToken))
                 {
                     tokens.Add(movieToken);
                     continue;
                 }
-                  if (TryMatchCriteria(expression, ref position, "SHOW", out var showToken))
+                if (TryMatchCriteria(expression, ref position, "SHOW", out var showToken))
                 {
                     tokens.Add(showToken);
                     continue;
                 }
-                
+
                 // New criteria types
                 if (TryMatchCriteria(expression, ref position, "TAG", out var tagToken))
                 {
                     tokens.Add(tagToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "PARENTALRATING", out var parentalRatingToken))
                 {
                     tokens.Add(parentalRatingToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "PARENTAL", out var parentalToken))
                 {
                     tokens.Add(parentalToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "RATING", out var ratingToken))
                 {
                     tokens.Add(ratingToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "COMMUNITYRATING", out var commRatingToken))
                 {
                     tokens.Add(commRatingToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "USERRATING", out var userRatingToken))
                 {
                     tokens.Add(userRatingToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "CRITICSRATING", out var criticsRatingToken))
                 {
                     tokens.Add(criticsRatingToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "CRITICS", out var criticsToken))
                 {
                     tokens.Add(criticsToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "PRODUCTIONLOCATION", out var prodLocationToken))
                 {
                     tokens.Add(prodLocationToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "LOCATION", out var locationToken))
                 {
                     tokens.Add(locationToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "COUNTRY", out var countryToken))
                 {
                     tokens.Add(countryToken);
                     continue;
                 }
-                
+
                 // New language-based criteria
                 if (TryMatchCriteria(expression, ref position, "LANG", out var langToken))
                 {
                     tokens.Add(langToken);
                     continue;
                 }
-                  if (TryMatchCriteria(expression, ref position, "SUB", out var subToken))
+                if (TryMatchCriteria(expression, ref position, "SUB", out var subToken))
                 {
                     tokens.Add(subToken);
                     continue;
                 }
-                
+
                 if (TryMatchCriteria(expression, ref position, "YEAR", out var yearToken))
                 {
                     tokens.Add(yearToken);
                     continue;
                 }
-                
+
                 // Custom rating criteria (user-provided override rating)
                 if (TryMatchCriteria(expression, ref position, "CUSTOMRATING", out var customRatingToken))
                 {
@@ -398,7 +399,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     tokens.Add(customToken);
                     continue;
                 }
-                
+
                 // Date-based criteria
                 if (TryMatchCriteria(expression, ref position, "RELEASEDATE", out var releaseDateToken))
                 {
@@ -453,6 +454,12 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     continue;
                 }
 
+                if (TryMatchCriteria(expression, ref position, "FILENAME", out var filenameToken))
+                {
+                    tokens.Add(filenameToken);
+                    continue;
+                }
+
                 // Check for parentheses
                 if (expression[position] == '(')
                 {
@@ -460,7 +467,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     position++;
                     continue;
                 }
-                
+
                 if (expression[position] == ')')
                 {
                     tokens.Add(new Token(TokenType.CloseParen));
@@ -473,17 +480,17 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                 {
                     position++; // Skip opening quote
                     int startPos = position;
-                    
+
                     // Find the closing quote
                     while (position < expression.Length && expression[position] != '"')
                         position++;
-                        
+
                     if (position >= expression.Length)
                         throw new Exception("Unterminated string literal");
-                        
+
                     string value = expression.Substring(startPos, position - startPos);
                     tokens.Add(new Token(TokenType.String, value));
-                    
+
                     position++; // Skip closing quote
                     continue;
                 }
@@ -500,18 +507,18 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         private bool TryMatchOperator(string expression, ref int position, string op, out Token token)
         {
             token = null;
-            
+
             if (position + op.Length <= expression.Length &&
                 expression.Substring(position, op.Length).Equals(op, StringComparison.OrdinalIgnoreCase))
             {
                 // Check if it's a whole word (followed by whitespace or end of string)
-                if (position + op.Length == expression.Length || 
+                if (position + op.Length == expression.Length ||
                     char.IsWhiteSpace(expression[position + op.Length]) ||
                     expression[position + op.Length] == '(' ||
                     expression[position + op.Length] == ')')
                 {
                     position += op.Length;
-                    
+
                     switch (op.ToUpper())
                     {
                         case "AND":
@@ -524,29 +531,30 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                             token = new Token(TokenType.Not);
                             break;
                     }
-                    
+
                     return true;
                 }
             }
-            
+
             return false;
-        }        private bool TryMatchCriteria(string expression, ref int position, string criteria, out Token token)
+        }
+        private bool TryMatchCriteria(string expression, ref int position, string criteria, out Token token)
         {
             token = null;
-            
+
             if (position + criteria.Length <= expression.Length &&
                 expression.Substring(position, criteria.Length).Equals(criteria, StringComparison.OrdinalIgnoreCase))
             {
                 // Check if it's a whole word (followed by whitespace, parenthesis, or end of string)
-                if (position + criteria.Length == expression.Length || 
+                if (position + criteria.Length == expression.Length ||
                     char.IsWhiteSpace(expression[position + criteria.Length]) ||
                     expression[position + criteria.Length] == '(' ||
                     expression[position + criteria.Length] == ')')
                 {
                     position += criteria.Length;
-                    
+
                     token = new Token(TokenType.Criteria);
-                      switch (criteria.ToUpper())
+                    switch (criteria.ToUpper())
                     {
                         case "TITLE":
                             token.CriteriaType = Configuration.CriteriaType.Title;
@@ -603,6 +611,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                         case "CUSTOM":
                             token.CriteriaType = Configuration.CriteriaType.CustomRating;
                             break;
+                        case "FILENAME":
+                            token.CriteriaType = Configuration.CriteriaType.Filename;
+                            break;
                         case "RELEASEDATE":
                         case "RELEASE":
                             token.CriteriaType = Configuration.CriteriaType.ReleaseDate;
@@ -624,11 +635,11 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                             token.CriteriaType = Configuration.CriteriaType.Watched;
                             break;
                     }
-                    
+
                     return true;
                 }
             }
-            
+
             return false;
         }
 
@@ -641,28 +652,28 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         private ExpressionNode ParseOrExpression(List<Token> tokens, ref int position)
         {
             var left = ParseAndExpression(tokens, ref position);
-            
+
             while (position < tokens.Count && tokens[position].Type == TokenType.Or)
             {
                 position++; // Skip OR
                 var right = ParseAndExpression(tokens, ref position);
                 left = new OrNode(left, right);
             }
-            
+
             return left;
         }
 
         private ExpressionNode ParseAndExpression(List<Token> tokens, ref int position)
         {
             var left = ParseNotExpression(tokens, ref position);
-            
+
             while (position < tokens.Count && tokens[position].Type == TokenType.And)
             {
                 position++; // Skip AND
                 var right = ParseNotExpression(tokens, ref position);
                 left = new AndNode(left, right);
             }
-            
+
             return left;
         }
 
@@ -674,7 +685,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                 var child = ParsePrimaryExpression(tokens, ref position);
                 return new NotNode(child);
             }
-            
+
             return ParsePrimaryExpression(tokens, ref position);
         }
 
@@ -682,39 +693,39 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         {
             if (position >= tokens.Count)
                 throw new Exception("Unexpected end of expression");
-                
+
             // Handle parenthesized expressions
             if (tokens[position].Type == TokenType.OpenParen)
             {
                 position++; // Skip (
                 var node = ParseExpressionTree(tokens, ref position);
-                
+
                 if (position >= tokens.Count || tokens[position].Type != TokenType.CloseParen)
                     throw new Exception("Missing closing parenthesis");
-                    
+
                 position++; // Skip )
                 return node;
             }
-            
+
             // Handle criteria expressions
             if (tokens[position].Type == TokenType.Criteria)
             {
                 var criteriaToken = tokens[position++];
-                
+
                 // Special handling for criteria that don't require string values
                 if (criteriaToken.CriteriaType == CriteriaType.Movie || criteriaToken.CriteriaType == CriteriaType.Show ||
                     criteriaToken.CriteriaType == CriteriaType.Unplayed || criteriaToken.CriteriaType == CriteriaType.Watched)
                 {
                     return new CriteriaNode(criteriaToken.CriteriaType.Value, string.Empty);
                 }
-                
+
                 if (position >= tokens.Count || tokens[position].Type != TokenType.String)
                     throw new Exception($"Expected string after {criteriaToken}");
-                    
+
                 var stringToken = tokens[position++];
                 return new CriteriaNode(criteriaToken.CriteriaType.Value, stringToken.Value);
             }
-            
+
             throw new Exception($"Unexpected token: {tokens[position].Type}");
         }
     }
