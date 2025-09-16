@@ -21,8 +21,13 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         ProductionLocation = 11, // Match by production country/location
         AudioLanguage = 12, // Match by audio language
         Subtitle = 13, // Match by subtitle language
-    Year = 14,      // Match by production/release year
-    CustomRating = 15 // Match by custom rating (user-provided override)
+        Year = 14,      // Match by production/release year
+        CustomRating = 15, // Match by custom rating (user-provided override)
+        ReleaseDate = 16, // Match by release date with day-based comparisons
+        AddedDate = 17,   // Match by date added to library with day-based comparisons
+        EpisodeAirDate = 18, // Match by most recent episode air date (for TV shows)
+        Unplayed = 19,   // Match unplayed items (not watched by any user)
+        Watched = 20     // Match watched items (played by at least one user)
     }
 
     // Token types for expression parsing
@@ -88,8 +93,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
 
         public override string ToString()
         {
-            // For media type criteria, don't include the value part
-            if (CriteriaType == CriteriaType.Movie || CriteriaType == CriteriaType.Show)
+            // For media type criteria and play state criteria, don't include the value part
+            if (CriteriaType == CriteriaType.Movie || CriteriaType == CriteriaType.Show ||
+                CriteriaType == CriteriaType.Unplayed || CriteriaType == CriteriaType.Watched)
             {
                 return $"{CriteriaType.ToString().ToUpper()}";
             }
@@ -392,6 +398,60 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     tokens.Add(customToken);
                     continue;
                 }
+                
+                // Date-based criteria
+                if (TryMatchCriteria(expression, ref position, "RELEASEDATE", out var releaseDateToken))
+                {
+                    tokens.Add(releaseDateToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "RELEASE", out var releaseToken))
+                {
+                    tokens.Add(releaseToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "ADDEDDATE", out var addedDateToken))
+                {
+                    tokens.Add(addedDateToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "ADDED", out var addedToken))
+                {
+                    tokens.Add(addedToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "EPISODEAIRDATE", out var episodeAirDateToken))
+                {
+                    tokens.Add(episodeAirDateToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "EPISODEAIR", out var episodeAirToken))
+                {
+                    tokens.Add(episodeAirToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "LASTAIR", out var lastAirToken))
+                {
+                    tokens.Add(lastAirToken);
+                    continue;
+                }
+
+                // Play state criteria
+                if (TryMatchCriteria(expression, ref position, "UNPLAYED", out var unplayedToken))
+                {
+                    tokens.Add(unplayedToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "UNWATCHED", out var unwatchedToken))
+                {
+                    tokens.Add(unwatchedToken);
+                    continue;
+                }
+                if (TryMatchCriteria(expression, ref position, "WATCHED", out var watchedToken))
+                {
+                    tokens.Add(watchedToken);
+                    continue;
+                }
 
                 // Check for parentheses
                 if (expression[position] == '(')
@@ -543,6 +603,26 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                         case "CUSTOM":
                             token.CriteriaType = Configuration.CriteriaType.CustomRating;
                             break;
+                        case "RELEASEDATE":
+                        case "RELEASE":
+                            token.CriteriaType = Configuration.CriteriaType.ReleaseDate;
+                            break;
+                        case "ADDEDDATE":
+                        case "ADDED":
+                            token.CriteriaType = Configuration.CriteriaType.AddedDate;
+                            break;
+                        case "EPISODEAIRDATE":
+                        case "EPISODEAIR":
+                        case "LASTAIR":
+                            token.CriteriaType = Configuration.CriteriaType.EpisodeAirDate;
+                            break;
+                        case "UNPLAYED":
+                        case "UNWATCHED":
+                            token.CriteriaType = Configuration.CriteriaType.Unplayed;
+                            break;
+                        case "WATCHED":
+                            token.CriteriaType = Configuration.CriteriaType.Watched;
+                            break;
                     }
                     
                     return true;
@@ -621,8 +701,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             {
                 var criteriaToken = tokens[position++];
                 
-                // Special handling for MOVIE and SHOW criteria that don't require string values
-                if (criteriaToken.CriteriaType == CriteriaType.Movie || criteriaToken.CriteriaType == CriteriaType.Show)
+                // Special handling for criteria that don't require string values
+                if (criteriaToken.CriteriaType == CriteriaType.Movie || criteriaToken.CriteriaType == CriteriaType.Show ||
+                    criteriaToken.CriteriaType == CriteriaType.Unplayed || criteriaToken.CriteriaType == CriteriaType.Watched)
                 {
                     return new CriteriaNode(criteriaToken.CriteriaType.Value, string.Empty);
                 }

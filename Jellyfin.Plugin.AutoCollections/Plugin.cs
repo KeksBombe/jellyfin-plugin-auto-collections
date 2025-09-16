@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Plugin.AutoCollections.Configuration;
@@ -10,6 +10,7 @@ using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.UserData;
 
 namespace Jellyfin.Plugin.AutoCollections
 {
@@ -23,6 +24,7 @@ namespace Jellyfin.Plugin.AutoCollections
             ICollectionManager collectionManager,
             IProviderManager providerManager,
             ILibraryManager libraryManager,
+            IUserDataManager userDataManager,
             ILoggerFactory loggerFactory)
             : base(appPaths, xmlSerializer)
         {
@@ -31,6 +33,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 providerManager,
                 collectionManager,
                 libraryManager,
+                userDataManager,
                 loggerFactory.CreateLogger<AutoCollectionsManager>(),
                 appPaths);
 
