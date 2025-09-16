@@ -20,30 +20,43 @@ using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
 using Jellyfin.Plugin.AutoCollections.Configuration;
+using MediaBrowser.Controller.UserData;
 
 namespace Jellyfin.Plugin.AutoCollections
-
 {
+    // ================================================================
+    // CLASS DECLARATION AND DEPENDENCY INJECTION
+    // ================================================================
+    // This section contains the main class definition, its dependencies,
+    // and initialization logic for the AutoCollectionsManager.
     public class AutoCollectionsManager : IDisposable
     {
         private readonly ICollectionManager _collectionManager;
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
+        private readonly IUserDataManager _userDataManager;
         private readonly Timer _timer;
         private readonly ILogger<AutoCollectionsManager> _logger;
         private readonly string _pluginDirectory;
 
-        public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
+        public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
         {
             _providerManager = providerManager;
             _collectionManager = collectionManager;
             _libraryManager = libraryManager;
+            _userDataManager = userDataManager;
             _logger = logger;
             _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
             _pluginDirectory = Path.Combine(applicationPaths.DataPath, "Autocollections");
             Directory.CreateDirectory(_pluginDirectory);
         }
 
+        // ================================================================
+        // SERIES SEARCH METHODS
+        // ================================================================
+        // This section contains methods for searching and filtering TV series
+        // from the Jellyfin library based on various criteria like tags, genres,
+        // and person associations.
         private IEnumerable<Series> GetSeriesFromLibrary(string term, Person? specificPerson = null)
         {
             IEnumerable<Series> results = Enumerable.Empty<Series>();
@@ -120,6 +133,12 @@ namespace Jellyfin.Plugin.AutoCollections
             return results;
         }
 
+        // ================================================================
+        // MOVIE SEARCH METHODS
+        // ================================================================
+        // This section contains methods for searching and filtering movies
+        // from the Jellyfin library based on various criteria like tags, genres,
+        // and person associations.
         private IEnumerable<Movie> GetMoviesFromLibrary(string term, Person? specificPerson = null)
         {
             IEnumerable<Movie> results = Enumerable.Empty<Movie>();
@@ -127,23 +146,45 @@ namespace Jellyfin.Plugin.AutoCollections
             if (specificPerson == null)
             {
                 // When no specific person is provided, search by tags and genres
-                var byTags = _libraryManager.GetItemList(new InternalItemsQuery
+                var byTagsImdb = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = false,
+                    HasImdbId = true,
                     Tags = [term]
                 }).Select(m => m as Movie);
 
-                var byGenres = _libraryManager.GetItemList(new InternalItemsQuery
+                var byTagsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = false,
+                    HasTmdbId = true,
+                    Tags = [term]
+                }).Select(m => m as Movie);
+
+                var byTags = byTagsImdb.Union(byTagsTmdb);
+
+                var byGenresImdb = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    HasImdbId = true,
                     Genres = [term]
                 }).Select(m => m as Movie);
+
+                var byGenresTmdb = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    HasTmdbId = true,
+                    Genres = [term]
+                }).Select(m => m as Movie);
+                
+                var byGenres = byGenresImdb.Union(byGenresTmdb);
                 
                 results = byTags.Union(byGenres);
             }
@@ -152,25 +193,49 @@ namespace Jellyfin.Plugin.AutoCollections
                 // When a specific person is provided, search by actor and director
                 var personName = specificPerson.Name;
                 
-                var byActors = _libraryManager.GetItemList(new InternalItemsQuery
+                var byActorsImdb = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = false,
+                    HasImdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Actor" }
                 }).OfType<Movie>();
 
-                var byDirectors = _libraryManager.GetItemList(new InternalItemsQuery
+                var byActorsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = false,
+                    HasTmdbId = true,
+                    Person = personName,
+                    PersonTypes = new[] { "Actor" }
+                }).OfType<Movie>();
+
+                var byActors = byActorsImdb.Union(byActorsTmdb);
+
+                var byDirectorsImdb = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    HasImdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Director" }
                 }).OfType<Movie>();
+
+                var byDirectorsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    HasTmdbId = true,
+                    Person = personName,
+                    PersonTypes = new[] { "Director" }
+                }).OfType<Movie>();
+                
+                var byDirectors = byDirectorsImdb.Union(byDirectorsTmdb);
                 
                 results = byActors.Union(byDirectors);
             }
@@ -196,6 +261,11 @@ namespace Jellyfin.Plugin.AutoCollections
             return results;
         }        
         
+        // ================================================================
+        // GENERIC SEARCH METHODS
+        // ================================================================
+        // This section contains methods that work with both movies and series,
+        // providing generic search functionality based on match types and patterns.
         private IEnumerable<Movie> GetMoviesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType)
         {
             // Get all non-null movies from the library
@@ -291,6 +361,11 @@ namespace Jellyfin.Plugin.AutoCollections
             return GetSeriesFromLibraryByMatch(titleMatch, caseSensitive, Configuration.MatchType.Title);
         }
 
+        // ================================================================
+        // COLLECTION MANAGEMENT METHODS
+        // ================================================================
+        // This section contains methods for managing collection contents,
+        // including adding/removing items and sorting collections.
         private async Task RemoveUnwantedMediaItems(BoxSet collection, IEnumerable<BaseItem> wantedMediaItems)
         {
             // Get the set of IDs for media items we want to keep
@@ -405,6 +480,11 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
 
+        // ================================================================
+        // COLLECTION RETRIEVAL METHODS
+        // ================================================================
+        // This section contains methods for retrieving existing collections
+        // from the Jellyfin library.
         private BoxSet? GetBoxSetByName(string name)
         {
             return _libraryManager.GetItemList(new InternalItemsQuery
@@ -415,7 +495,15 @@ namespace Jellyfin.Plugin.AutoCollections
                 Tags = new[] { "Autocollection" },
                 Name = name,
             }).Select(b => b as BoxSet).FirstOrDefault();
-        }        public async Task ExecuteAutoCollectionsNoProgress()
+        }
+
+        // ================================================================
+        // MAIN EXECUTION METHODS
+        // ================================================================
+        // This section contains the primary methods that orchestrate the
+        // auto-collection process, including execution entry points and
+        // progress handling.
+        public async Task ExecuteAutoCollectionsNoProgress()
         {
             _logger.LogInformation("Performing ExecuteAutoCollections");
             
@@ -465,6 +553,11 @@ namespace Jellyfin.Plugin.AutoCollections
             await ExecuteAutoCollectionsNoProgress();
         }
 
+        // ================================================================
+        // COLLECTION NAMING METHODS
+        // ================================================================
+        // This section contains methods for determining and formatting
+        // collection names based on configuration settings.
         private string GetCollectionName(TagTitlePair tagTitlePair)
         {
             // If a custom title is set, use it
@@ -492,6 +585,11 @@ namespace Jellyfin.Plugin.AutoCollections
             return $"{capitalizedTag} Auto Collection";
         }
 
+        // ================================================================
+        // IMAGE/PHOTO SETTING METHODS
+        // ================================================================
+        // This section contains methods for setting collection images/photos
+        // from various sources including persons and media items.
         private async Task SetPhotoForCollection(BoxSet collection, Person? specificPerson = null)
         {
             try
@@ -626,6 +724,11 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
 
+        // ================================================================
+        // TAG-BASED EXECUTION METHODS
+        // ================================================================
+        // This section contains methods for processing tag-title pairs and
+        // creating collections based on tag matching criteria.
         private async Task ExecuteAutoCollectionsForTagTitlePair(TagTitlePair tagTitlePair)
         {
             _logger.LogInformation($"Performing ExecuteAutoCollections for tag: {tagTitlePair.Tag}");
@@ -730,7 +833,14 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 _logger.LogInformation("Preserving existing image for collection: {CollectionName}", collectionName);
             }
-        }        private async Task ExecuteAutoCollectionsForTitleMatchPair(TitleMatchPair titleMatchPair)
+        }
+
+        // ================================================================
+        // TITLE MATCH EXECUTION METHODS
+        // ================================================================
+        // This section contains methods for processing title match pairs and
+        // creating collections based on pattern matching criteria.
+        private async Task ExecuteAutoCollectionsForTitleMatchPair(TitleMatchPair titleMatchPair)
         {            string matchTypeText = titleMatchPair.MatchType switch
             {
                 Configuration.MatchType.Title => "title",
@@ -834,6 +944,11 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
 
+        // ================================================================
+        // TIMER AND LIFECYCLE METHODS
+        // ================================================================
+        // This section contains methods for handling timer events and
+        // managing the plugin's lifecycle (startup, disposal).
         private void OnTimerElapsed()
         {
             // Stop the timer until next update
@@ -850,6 +965,11 @@ namespace Jellyfin.Plugin.AutoCollections
             _timer?.Dispose();
         }
 
+        // ================================================================
+        // PERSON SEARCH HELPER METHODS
+        // ================================================================
+        // This section contains helper methods for searching media items
+        // based on person associations (actors, directors).
         // Helper method to find movies with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
         private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
@@ -956,7 +1076,14 @@ namespace Jellyfin.Plugin.AutoCollections
             }
             
             return result;
-        }        // Method to evaluate a criteria for a movie
+        }
+
+        // ================================================================
+        // CRITERIA EVALUATION METHODS
+        // ================================================================
+        // This section contains methods for evaluating complex criteria
+        // against movies and series for advanced expression-based collections.
+        // Method to evaluate a criteria for a movie
         private bool EvaluateMovieCriteria(Movie movie, Configuration.CriteriaType criteriaType, string value, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
@@ -965,6 +1092,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 
             switch (criteriaType)
             {
+                // Basic metadata criteria
                 case Configuration.CriteriaType.Title:
                     return movie.Name?.Contains(value, comparison) == true;
                     
@@ -986,6 +1114,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     var matchingDirectorMovies = GetMoviesWithPerson(value, "Director", caseSensitive);
                     return matchingDirectorMovies.Any(m => m.Id == movie.Id);
                     
+                // Media type criteria
                 case Configuration.CriteriaType.Movie:
                     // Always true for movies
                     return true;
@@ -998,6 +1127,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     return movie.Tags != null && 
                            movie.Tags.Any(t => t.Contains(value, comparison));
                            
+                // Content rating and parental guidance criteria
                 case Configuration.CriteriaType.ParentalRating:
                     return !string.IsNullOrEmpty(movie.OfficialRating) && 
                            movie.OfficialRating.Contains(value, comparison);
@@ -1005,6 +1135,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     return CompareNumericValue(movie.CommunityRating, value);                case Configuration.CriteriaType.CriticsRating:
                     return CompareNumericValue(movie.CriticRating, value);
                            
+                // Technical and media stream criteria
                 case Configuration.CriteriaType.AudioLanguage:
                     return movie.GetMediaStreams()
                            .Any(stream => 
@@ -1021,6 +1152,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     return movie.ProductionLocations != null && 
                            movie.ProductionLocations.Any(l => l.Contains(value, comparison));
                            
+                // Temporal and date-based criteria
                 case Configuration.CriteriaType.Year:
                     if (movie.ProductionYear.HasValue)
                     {
@@ -1043,6 +1175,24 @@ namespace Jellyfin.Plugin.AutoCollections
 
                 case Configuration.CriteriaType.Filename:
                     return !string.IsNullOrEmpty(movie.Path) && movie.Path.Contains(value, comparison);
+                    
+                case Configuration.CriteriaType.ReleaseDate:
+                    return CompareDateValue(movie.PremiereDate, value);
+                    
+                case Configuration.CriteriaType.AddedDate:
+                    return CompareDateValue(movie.DateCreated, value);
+                    
+                case Configuration.CriteriaType.EpisodeAirDate:
+                    // Movies don't have episodes, so always return false
+                    return false;
+                    
+                case Configuration.CriteriaType.Unplayed:
+                    // Check if the movie is unplayed (not watched by any user)
+                    return IsItemUnplayed(movie);
+                    
+                case Configuration.CriteriaType.Watched:
+                    // Check if the movie is watched (played by at least one user)
+                    return !IsItemUnplayed(movie);
                     
                 default:
                     return false;
@@ -1199,10 +1349,33 @@ namespace Jellyfin.Plugin.AutoCollections
                     }
                     return false;
                     
+                case Configuration.CriteriaType.ReleaseDate:
+                    return CompareDateValue(series.PremiereDate, value);
+                    
+                case Configuration.CriteriaType.AddedDate:
+                    return CompareDateValue(series.DateCreated, value);
+                    
+                case Configuration.CriteriaType.EpisodeAirDate:
+                    return CompareDateValue(GetMostRecentEpisodeAirDate(series), value);
+                    
+                case Configuration.CriteriaType.Unplayed:
+                    // Check if the series is unplayed (not watched by any user)
+                    return IsItemUnplayed(series);
+                    
+                case Configuration.CriteriaType.Watched:
+                    // Check if the series is watched (played by at least one user)
+                    return !IsItemUnplayed(series);
+                    
                 default:
                     return false;
             }
         }
+
+        // ================================================================
+        // EXPRESSION COLLECTION METHODS
+        // ================================================================
+        // This section contains methods for processing expression-based
+        // collections using complex criteria and boolean logic.
           // Process expression collections
         private async Task ExecuteAutoCollectionsForExpressionCollection(Configuration.ExpressionCollection expressionCollection)
         {
@@ -1298,6 +1471,11 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
         
+        // ================================================================
+        // UTILITY METHODS
+        // ================================================================
+        // This section contains utility and helper methods for various
+        // common operations like deduplication, comparisons, and data processing.
         private List<BaseItem> DedupeMediaItems(List<BaseItem> mediaItems)
         {
             var withoutDateOrTitle = mediaItems.Where(i => !i.PremiereDate.HasValue || string.IsNullOrWhiteSpace(i.Name)).ToList();
@@ -1358,6 +1536,116 @@ namespace Jellyfin.Plugin.AutoCollections
             }
             
             return false;
+        }
+        
+        // Helper method to handle date comparisons with day-based expressions
+        private bool CompareDateValue(DateTime? actualDate, string targetValueString)
+        {
+            if (!actualDate.HasValue)
+                return false;
+                
+            // Remove any surrounding whitespace
+            targetValueString = targetValueString.Trim();
+                
+            try
+            {
+                // Parse the number of days
+                string numberPart;
+                string operatorPart;
+                
+                if (targetValueString.StartsWith(">="))
+                {
+                    operatorPart = ">=";
+                    numberPart = targetValueString.Substring(2);
+                }
+                else if (targetValueString.StartsWith("<="))
+                {
+                    operatorPart = "<=";
+                    numberPart = targetValueString.Substring(2);
+                }
+                else if (targetValueString.StartsWith(">"))
+                {
+                    operatorPart = ">";
+                    numberPart = targetValueString.Substring(1);
+                }
+                else if (targetValueString.StartsWith("<"))
+                {
+                    operatorPart = "<";
+                    numberPart = targetValueString.Substring(1);
+                }
+                else if (targetValueString.StartsWith("="))
+                {
+                    operatorPart = "=";
+                    numberPart = targetValueString.Substring(1);
+                }
+                else
+                {
+                    // Default to > if no operator specified
+                    operatorPart = ">";
+                    numberPart = targetValueString;
+                }
+                
+                if (!int.TryParse(numberPart, out int targetDays))
+                    return false;
+                    
+                // Calculate the difference in days
+                // Use the same date handling as Jellyfin for consistency
+                var now = DateTime.Now; // Use local time instead of UTC for consistency with Jellyfin
+                var daysDifference = (now - actualDate.Value).TotalDays;
+                
+                // Perform comparison
+                switch (operatorPart)
+                {
+                    case ">=":
+                        return daysDifference >= targetDays;
+                    case "<=":
+                        return daysDifference <= targetDays;
+                    case ">":
+                        return daysDifference > targetDays;
+                    case "<":
+                        return daysDifference < targetDays;
+                    case "=":
+                        return Math.Abs(daysDifference - targetDays) < 1.0; // Within 1 day
+                    default:
+                        return false;
+                }
+            }
+            catch (FormatException)
+            {
+                _logger.LogWarning($"Failed to parse '{targetValueString}' as a day value for date comparison");
+            }
+            
+            return false;
+        }
+        
+        // Helper method to check if an item is unplayed (not watched by any user)
+        private bool IsItemUnplayed(BaseItem item)
+        {
+            try
+            {
+                // Get all users from the user manager
+                var users = _userDataManager.GetAllUsers();
+                
+                // Check if any user has played this item
+                foreach (var user in users)
+                {
+                    var userData = _userDataManager.GetUserData(user.Id, item);
+                    if (userData != null && userData.Played)
+                    {
+                        // At least one user has played this item
+                        return false;
+                    }
+                }
+                
+                // No user has played this item
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error checking play state for item {ItemName}", item.Name);
+                // If we can't determine the play state, assume it's unplayed
+                return true;
+            }
         }
     }
 }
