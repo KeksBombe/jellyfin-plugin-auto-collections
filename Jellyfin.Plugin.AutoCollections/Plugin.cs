@@ -10,7 +10,6 @@ using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Controller.UserData;
 
 namespace Jellyfin.Plugin.AutoCollections
 {

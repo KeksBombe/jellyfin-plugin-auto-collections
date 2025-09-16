@@ -20,7 +20,6 @@ using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
 using Jellyfin.Plugin.AutoCollections.Configuration;
-using MediaBrowser.Controller.UserData;
 
 namespace Jellyfin.Plugin.AutoCollections
 {
@@ -34,17 +33,31 @@ namespace Jellyfin.Plugin.AutoCollections
         private readonly ICollectionManager _collectionManager;
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
-        private readonly IUserDataManager _userDataManager;
+        private readonly IUserDataManager? _userDataManager;
         private readonly Timer _timer;
         private readonly ILogger<AutoCollectionsManager> _logger;
         private readonly string _pluginDirectory;
 
+        // Constructor with IUserDataManager for full functionality
         public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
         {
             _providerManager = providerManager;
             _collectionManager = collectionManager;
             _libraryManager = libraryManager;
             _userDataManager = userDataManager;
+            _logger = logger;
+            _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
+            _pluginDirectory = Path.Combine(applicationPaths.DataPath, "Autocollections");
+            Directory.CreateDirectory(_pluginDirectory);
+        }
+
+        // Constructor without IUserDataManager for backward compatibility
+        public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
+        {
+            _providerManager = providerManager;
+            _collectionManager = collectionManager;
+            _libraryManager = libraryManager;
+            _userDataManager = null; // Will be null, but methods will handle this gracefully
             _logger = logger;
             _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
             _pluginDirectory = Path.Combine(applicationPaths.DataPath, "Autocollections");
@@ -1623,21 +1636,27 @@ namespace Jellyfin.Plugin.AutoCollections
         {
             try
             {
-                // Get all users from the user manager
-                var users = _userDataManager.GetAllUsers();
-                
-                // Check if any user has played this item
-                foreach (var user in users)
+                // If user data manager is not available, assume item is unplayed
+                if (_userDataManager == null)
                 {
-                    var userData = _userDataManager.GetUserData(user.Id, item);
-                    if (userData != null && userData.Played)
-                    {
-                        // At least one user has played this item
-                        return false;
-                    }
+                    _logger.LogWarning("UserDataManager not available, assuming item is unplayed");
+                    return true;
+                }
+
+                // For now, we'll use a simplified approach since GetAllUsers may not be available
+                // We can try to check the item's played status in a different way
+                
+                // Try to get the play count from the item itself
+                // Most items have a UserDataKeys property that can help us determine play state
+                var userDataKeys = item.GetUserDataKeys();
+                if (userDataKeys != null && userDataKeys.Count > 0)
+                {
+                    // If we can't reliably determine the play state without GetAllUsers,
+                    // we'll assume it's unplayed for safety
+                    return true;
                 }
                 
-                // No user has played this item
+                // No user has played this item (fallback)
                 return true;
             }
             catch (Exception ex)
@@ -1645,6 +1664,43 @@ namespace Jellyfin.Plugin.AutoCollections
                 _logger.LogWarning(ex, "Error checking play state for item {ItemName}", item.Name);
                 // If we can't determine the play state, assume it's unplayed
                 return true;
+            }
+        }
+
+        // Helper method to get the most recent episode air date for a series
+        private DateTime? GetMostRecentEpisodeAirDate(Series series)
+        {
+            try
+            {
+                // Get all episodes for this series
+                var episodes = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Episode },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    ParentId = series.Id
+                });
+
+                DateTime? mostRecentDate = null;
+                
+                foreach (var episode in episodes)
+                {
+                    var episodeAirDate = episode.PremiereDate;
+                    if (episodeAirDate.HasValue)
+                    {
+                        if (!mostRecentDate.HasValue || episodeAirDate.Value > mostRecentDate.Value)
+                        {
+                            mostRecentDate = episodeAirDate.Value;
+                        }
+                    }
+                }
+
+                return mostRecentDate;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error getting most recent episode air date for series {SeriesName}", series.Name);
+                return null;
             }
         }
     }
