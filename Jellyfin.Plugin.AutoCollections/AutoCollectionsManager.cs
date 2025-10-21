@@ -16,13 +16,19 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Data.Enums;
-using Jellyfin.Data.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
 using Jellyfin.Plugin.AutoCollections.Configuration;
 
 namespace Jellyfin.Plugin.AutoCollections
 {
+    // SortOrder enum (was removed from Jellyfin.Data.Entities in 10.11)
+    public enum SortOrder
+    {
+        Ascending,
+        Descending
+    }
+
     // ================================================================
     // CLASS DECLARATION AND DEPENDENCY INJECTION
     // ================================================================
