@@ -1113,15 +1113,22 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 // Basic metadata criteria
                 case Configuration.CriteriaType.Title:
-                    return movie.Name?.Contains(value, comparison) == true;
+                    var titleMatch = movie.Name?.Contains(value, comparison) == true;
+                    _logger.LogDebug("TITLE check for '{MovieName}' contains '{Value}': {Result}", 
+                        movie.Name, value, titleMatch);
+                    return titleMatch;
                     
                 case Configuration.CriteriaType.Genre:
                     return movie.Genres != null && 
                            movie.Genres.Any(g => g.Contains(value, comparison));
                     
                 case Configuration.CriteriaType.Studio:
-                    return movie.Studios != null && 
+                    var studioList = movie.Studios != null ? string.Join(", ", movie.Studios) : "null";
+                    var studioMatch = movie.Studios != null && 
                            movie.Studios.Any(s => s.Contains(value, comparison));
+                    _logger.LogDebug("STUDIO check for '{MovieName}' - Studios: [{Studios}], searching for '{Value}': {Result}", 
+                        movie.Name, studioList, value, studioMatch);
+                    return studioMatch;
                     
                 case Configuration.CriteriaType.Actor:
                     // Find matching actors for this movie using the existing method
