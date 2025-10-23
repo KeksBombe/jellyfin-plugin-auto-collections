@@ -411,16 +411,25 @@ namespace Jellyfin.Plugin.AutoCollections
                 .ToHashSet();            
 
             // Create LinkedChild objects for items that aren't already in the collection
-            var childrenToAdd = wantedMediaItems
+            var itemsToAddList = wantedMediaItems
                 .Where(item => !existingItemIds.Contains(item.Id))
                 .OrderByDescending(item => item.ProductionYear)
                 .OrderByDescending(item => item.PremiereDate ?? DateTime.MinValue)
-                .Select(item => item.Id)
-                .ToArray();
+                .ToList();
 
-            if (childrenToAdd.Length > 0)
+            if (itemsToAddList.Count > 0)
             {
-                _logger.LogInformation($"Adding {childrenToAdd.Length} items to collection {collection.Name}");
+                _logger.LogInformation($"Adding {itemsToAddList.Count} items to collection {collection.Name}");
+                
+                // Log each item being added
+                foreach (var item in itemsToAddList)
+                {
+                    var itemType = item is Movie ? "Movie" : item is Series ? "Series" : item.GetType().Name;
+                    var year = item.ProductionYear?.ToString() ?? "Unknown";
+                    _logger.LogDebug($"  Adding {itemType}: '{item.Name}' ({year}) [ID: {item.Id}]");
+                }
+                
+                var childrenToAdd = itemsToAddList.Select(item => item.Id).ToArray();
                 await _collectionManager.AddToCollectionAsync(collection.Id, childrenToAdd).ConfigureAwait(true);
             }
         }
