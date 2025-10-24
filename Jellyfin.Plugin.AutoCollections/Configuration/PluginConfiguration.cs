@@ -125,8 +125,10 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             ExpressionCollections = new List<ExpressionCollection>();
             
             // Keep these for backward compatibility but they won't be used
+#pragma warning disable CS0618 // Type or member is obsolete
             TagTitlePairs = new List<TagTitlePair>();
             Tags = new string[0];
+#pragma warning restore CS0618 // Type or member is obsolete
             
             // Flag to track if configuration has been initialized to prevent resetting user's intentional empty collections
             IsInitialized = false;

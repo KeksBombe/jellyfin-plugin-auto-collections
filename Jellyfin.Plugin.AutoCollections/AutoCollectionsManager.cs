@@ -22,13 +22,13 @@ using Jellyfin.Plugin.AutoCollections.Configuration;
 
 namespace Jellyfin.Plugin.AutoCollections
 {
-    // SortOrder enum (was removed from Jellyfin.Data.Entities in 10.11)
-    public enum SortOrder
+    // Internal enum for sort order
+    internal enum SortOrder
     {
         Ascending,
         Descending
     }
-
+    
     // ================================================================
     // CLASS DECLARATION AND DEPENDENCY INJECTION
     // ================================================================
@@ -90,7 +90,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     HasTvdbId = true,
                     Tags = [term]
-                }).Select(m => m as Series);
+                }).OfType<Series>();
 
                 var byGenres = _libraryManager.GetItemList(new InternalItemsQuery
                 {
@@ -99,7 +99,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     HasTvdbId = true,
                     Genres = [term]
-                }).Select(m => m as Series);
+                }).OfType<Series>();
                 
                 results = byTags.Union(byGenres);
             }
@@ -116,7 +116,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     HasTvdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Actor" }
-                }).Select(m => m as Series);
+                }).OfType<Series>();
 
                 var byDirectors = _libraryManager.GetItemList(new InternalItemsQuery
                 {
@@ -126,7 +126,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     HasTvdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Director" }
-                }).Select(m => m as Series);
+                }).OfType<Series>();
                 
                 results = byActors.Union(byDirectors);
             }
@@ -172,7 +172,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     HasImdbId = true,
                     Tags = [term]
-                }).Select(m => m as Movie);
+                }).OfType<Movie>();
 
                 var byTagsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
                 {
@@ -181,7 +181,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     HasTmdbId = true,
                     Tags = [term]
-                }).Select(m => m as Movie);
+                }).OfType<Movie>();
 
                 var byTags = byTagsImdb.Union(byTagsTmdb);
 
@@ -192,7 +192,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     HasImdbId = true,
                     Genres = [term]
-                }).Select(m => m as Movie);
+                }).OfType<Movie>();
 
                 var byGenresTmdb = _libraryManager.GetItemList(new InternalItemsQuery
                 {
@@ -201,7 +201,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     HasTmdbId = true,
                     Genres = [term]
-                }).Select(m => m as Movie);
+                }).OfType<Movie>();
                 
                 var byGenres = byGenresImdb.Union(byGenresTmdb);
                 
@@ -391,15 +391,30 @@ namespace Jellyfin.Plugin.AutoCollections
             var wantedItemIds = wantedMediaItems.Select(item => item.Id).ToHashSet();
 
             // Get current items and filter for unwanted ones
-            var childrenToRemove = collection.GetLinkedChildren()
+            var currentChildren = collection.GetLinkedChildren().ToList();
+            var childrenToRemove = currentChildren
                 .Where(item => !wantedItemIds.Contains(item.Id))
-                .Select(item => item.Id)
-                .ToArray();
+                .ToList();
 
-            if (childrenToRemove.Length > 0)
+            if (childrenToRemove.Count > 0)
             {
-                _logger.LogInformation($"Removing {childrenToRemove.Length} items from collection {collection.Name}");
-                await _collectionManager.RemoveFromCollectionAsync(collection.Id, childrenToRemove).ConfigureAwait(true);
+                _logger.LogDebug("Removing {Count} items from collection '{CollectionName}':", 
+                    childrenToRemove.Count, collection.Name);
+                
+                foreach (var item in childrenToRemove)
+                {
+                    _logger.LogDebug("  - Removing: '{Title}' (ID: {Id}) - no longer matches criteria", 
+                        item.Name, item.Id);
+                }
+                
+                await _collectionManager.RemoveFromCollectionAsync(
+                    collection.Id, 
+                    childrenToRemove.Select(i => i.Id).ToArray()
+                ).ConfigureAwait(true);
+            }
+            else
+            {
+                _logger.LogDebug("No items to remove from collection '{CollectionName}'", collection.Name);
             }
         }
 
@@ -411,26 +426,34 @@ namespace Jellyfin.Plugin.AutoCollections
                 .ToHashSet();            
 
             // Create LinkedChild objects for items that aren't already in the collection
-            var itemsToAddList = wantedMediaItems
+            var itemsToAdd = wantedMediaItems
                 .Where(item => !existingItemIds.Contains(item.Id))
                 .OrderByDescending(item => item.ProductionYear)
                 .OrderByDescending(item => item.PremiereDate ?? DateTime.MinValue)
                 .ToList();
 
-            if (itemsToAddList.Count > 0)
+            if (itemsToAdd.Count > 0)
             {
-                _logger.LogInformation($"Adding {itemsToAddList.Count} items to collection {collection.Name}");
+                _logger.LogDebug("Adding {Count} new items to collection '{CollectionName}':", 
+                    itemsToAdd.Count, collection.Name);
                 
-                // Log each item being added
-                foreach (var item in itemsToAddList)
+                foreach (var item in itemsToAdd)
                 {
-                    var itemType = item is Movie ? "Movie" : item is Series ? "Series" : item.GetType().Name;
-                    var year = item.ProductionYear?.ToString() ?? "Unknown";
-                    _logger.LogDebug($"  Adding {itemType}: '{item.Name}' ({year}) [ID: {item.Id}]");
+                    var itemType = item is Movie ? "Movie" : item is Series ? "Series" : "Item";
+                    var year = item.ProductionYear?.ToString() ?? "Unknown year";
+                    _logger.LogDebug("  + Adding {Type}: '{Title}' ({Year}) (ID: {Id})", 
+                        itemType, item.Name, year, item.Id);
                 }
                 
-                var childrenToAdd = itemsToAddList.Select(item => item.Id).ToArray();
-                await _collectionManager.AddToCollectionAsync(collection.Id, childrenToAdd).ConfigureAwait(true);
+                await _collectionManager.AddToCollectionAsync(
+                    collection.Id, 
+                    itemsToAdd.Select(i => i.Id).ToArray()
+                ).ConfigureAwait(true);
+            }
+            else
+            {
+                _logger.LogDebug("No new items to add to collection '{CollectionName}' - all matching items already present", 
+                    collection.Name);
             }
         }
 
@@ -820,17 +843,46 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 // AND matching - items must match all tags
                 _logger.LogInformation("Using AND matching mode for tags: {Tags}", string.Join(", ", tags));
+                _logger.LogDebug("Searching for items that match ALL of: {Tags}", string.Join(", ", tags));
+                
                 allMovies = GetMoviesFromLibraryWithAndMatching(tags, specificPerson).ToList();
                 allSeries = GetSeriesFromLibraryWithAndMatching(tags, specificPerson).ToList();
+                
+                _logger.LogDebug("AND matching found {MovieCount} movies and {SeriesCount} series", 
+                    allMovies.Count, allSeries.Count);
             }
             else
             {
                 // OR matching (default) - items can match any tag
                 _logger.LogInformation("Using OR matching mode for tags: {Tags}", string.Join(", ", tags));
+                _logger.LogDebug("Searching for items that match ANY of: {Tags}", string.Join(", ", tags));
+                
                 foreach (var tag in tags)
                 {
+                    _logger.LogDebug("Searching for tag: '{Tag}'", tag);
                     var movies = GetMoviesFromLibrary(tag, specificPerson).ToList();
                     var series = GetSeriesFromLibrary(tag, specificPerson).ToList();
+                    
+                    _logger.LogDebug("  Found {MovieCount} movies and {SeriesCount} series for tag '{Tag}'", 
+                        movies.Count, series.Count, tag);
+                    
+                    if (movies.Count > 0)
+                    {
+                        foreach (var movie in movies)
+                        {
+                            var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("    + Movie: '{Title}' ({Year})", movie.Name, year);
+                        }
+                    }
+                    
+                    if (series.Count > 0)
+                    {
+                        foreach (var s in series)
+                        {
+                            var year = s.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("    + Series: '{Title}' ({Year})", s.Name, year);
+                        }
+                    }
                     
                     _logger.LogInformation($"Found {movies.Count} movies and {series.Count} series for tag: {tag}");
                     
@@ -839,8 +891,20 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
                 
                 // Remove duplicates
+                var originalMovieCount = allMovies.Count;
+                var originalSeriesCount = allSeries.Count;
+                
                 allMovies = allMovies.Distinct().ToList();
                 allSeries = allSeries.Distinct().ToList();
+                
+                var movieDupes = originalMovieCount - allMovies.Count;
+                var seriesDupes = originalSeriesCount - allSeries.Count;
+                
+                if (movieDupes > 0 || seriesDupes > 0)
+                {
+                    _logger.LogDebug("Removed {MovieDupes} duplicate movies and {SeriesDupes} duplicate series from OR matching", 
+                        movieDupes, seriesDupes);
+                }
             }
             
             _logger.LogInformation($"Processing {allMovies.Count} movies and {allSeries.Count} series total for collection: {collectionName}");
@@ -907,7 +971,11 @@ namespace Jellyfin.Plugin.AutoCollections
                 isNewCollection = true;
             }
             collection.DisplayOrder = "Default";
-              // Find all media items that match the pattern based on match type
+              
+            _logger.LogDebug("Title Match Collection '{CollectionName}' - Pattern: '{Pattern}', Match Type: {MatchType}, Case Sensitive: {CaseSensitive}", 
+                collectionName, titleMatchPair.TitleMatch, titleMatchPair.MatchType, titleMatchPair.CaseSensitive);
+            
+            // Find all media items that match the pattern based on match type
             List<Movie> allMovies = new();
             List<Series> allSeries = new();
             
@@ -916,27 +984,42 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 case Configuration.MediaTypeFilter.Movies:
                     // Only include movies
+                    _logger.LogDebug("Media filter: Movies only");
                     allMovies = GetMoviesFromLibraryByMatch(
                         titleMatchPair.TitleMatch, 
                         titleMatchPair.CaseSensitive, 
                         titleMatchPair.MatchType
                     ).ToList();
                     _logger.LogInformation($"Media filter: Movies only - found {allMovies.Count} matching items");
+                    
+                    foreach (var movie in allMovies)
+                    {
+                        var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                        _logger.LogDebug("  + Movie: '{Title}' ({Year})", movie.Name, year);
+                    }
                     break;
                     
                 case Configuration.MediaTypeFilter.Series:
                     // Only include TV series
+                    _logger.LogDebug("Media filter: Series only");
                     allSeries = GetSeriesFromLibraryByMatch(
                         titleMatchPair.TitleMatch, 
                         titleMatchPair.CaseSensitive, 
                         titleMatchPair.MatchType
                     ).ToList();
                     _logger.LogInformation($"Media filter: Series only - found {allSeries.Count} matching items");
+                    
+                    foreach (var series in allSeries)
+                    {
+                        var year = series.ProductionYear?.ToString() ?? "Unknown year";
+                        _logger.LogDebug("  + Series: '{Title}' ({Year})", series.Name, year);
+                    }
                     break;
                     
                 case Configuration.MediaTypeFilter.All:
                 default:
                     // Include both movies and series (default behavior)
+                    _logger.LogDebug("Media filter: All (movies and series)");
                     allMovies = GetMoviesFromLibraryByMatch(
                         titleMatchPair.TitleMatch, 
                         titleMatchPair.CaseSensitive, 
@@ -949,6 +1032,18 @@ namespace Jellyfin.Plugin.AutoCollections
                         titleMatchPair.MatchType
                     ).ToList();
                     _logger.LogInformation($"Media filter: All - found {allMovies.Count} movies and {allSeries.Count} series");
+                    
+                    foreach (var movie in allMovies)
+                    {
+                        var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                        _logger.LogDebug("  + Movie: '{Title}' ({Year})", movie.Name, year);
+                    }
+                    
+                    foreach (var series in allSeries)
+                    {
+                        var year = series.ProductionYear?.ToString() ?? "Unknown year";
+                        _logger.LogDebug("  + Series: '{Title}' ({Year})", series.Name, year);
+                    }
                     break;
             }
             
@@ -1122,22 +1217,15 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 // Basic metadata criteria
                 case Configuration.CriteriaType.Title:
-                    var titleMatch = movie.Name?.Contains(value, comparison) == true;
-                    _logger.LogDebug("TITLE check for '{MovieName}' contains '{Value}': {Result}", 
-                        movie.Name, value, titleMatch);
-                    return titleMatch;
+                    return movie.Name?.Contains(value, comparison) == true;
                     
                 case Configuration.CriteriaType.Genre:
                     return movie.Genres != null && 
                            movie.Genres.Any(g => g.Contains(value, comparison));
                     
                 case Configuration.CriteriaType.Studio:
-                    var studioList = movie.Studios != null ? string.Join(", ", movie.Studios) : "null";
-                    var studioMatch = movie.Studios != null && 
+                    return movie.Studios != null && 
                            movie.Studios.Any(s => s.Contains(value, comparison));
-                    _logger.LogDebug("STUDIO check for '{MovieName}' - Studios: [{Studios}], searching for '{Value}': {Result}", 
-                        movie.Name, studioList, value, studioMatch);
-                    return studioMatch;
                     
                 case Configuration.CriteriaType.Actor:
                     // Find matching actors for this movie using the existing method
@@ -1461,29 +1549,54 @@ namespace Jellyfin.Plugin.AutoCollections
             _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to evaluate", 
                 allMovies.Count, allSeries.Count);
             
+            _logger.LogDebug("Expression collection '{CollectionName}' - Expression: {Expression}", 
+                collectionName, expressionCollection.Expression);
+            
             // Filter movies and series based on the expression
             var matchingMovies = new List<Movie>();
             var matchingSeries = new List<Series>();
             
             if (expressionCollection.ParsedExpression != null)
             {
+                _logger.LogDebug("Evaluating movies against expression...");
+                
                 matchingMovies = allMovies
                     .Where(movie => movie != null)
                     .Where(movie => 
                     {
-                        return expressionCollection.ParsedExpression.Evaluate(
+                        var matches = expressionCollection.ParsedExpression.Evaluate(
                             (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
                         );
+                        
+                        if (matches)
+                        {
+                            var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
+                                movie.Name, year, movie.Id);
+                        }
+                        
+                        return matches;
                     })
                     .ToList();
+                
+                _logger.LogDebug("Evaluating series against expression...");
                     
                 matchingSeries = allSeries
                     .Where(series => series != null)
                     .Where(series => 
                     {
-                        return expressionCollection.ParsedExpression.Evaluate(
+                        var matches = expressionCollection.ParsedExpression.Evaluate(
                             (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
                         );
+                        
+                        if (matches)
+                        {
+                            var year = series.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
+                                series.Name, year, series.Id);
+                        }
+                        
+                        return matches;
                     })
                     .ToList();
             }
@@ -1513,13 +1626,64 @@ namespace Jellyfin.Plugin.AutoCollections
         // common operations like deduplication, comparisons, and data processing.
         private List<BaseItem> DedupeMediaItems(List<BaseItem> mediaItems)
         {
-            var withoutDateOrTitle = mediaItems.Where(i => !i.PremiereDate.HasValue || string.IsNullOrWhiteSpace(i.Name)).ToList();
-            var uniqueItems = mediaItems
+            _logger.LogDebug("Starting deduplication process for {Count} media items", mediaItems.Count);
+            
+            var withoutDateOrTitle = mediaItems
+                .Where(i => !i.PremiereDate.HasValue || string.IsNullOrWhiteSpace(i.Name))
+                .ToList();
+                
+            if (withoutDateOrTitle.Count > 0)
+            {
+                _logger.LogDebug("Found {Count} items without date or title - keeping all:", 
+                    withoutDateOrTitle.Count);
+                foreach (var item in withoutDateOrTitle)
+                {
+                    var reason = string.IsNullOrWhiteSpace(item.Name) ? "missing title" : "missing premiere date";
+                    _logger.LogDebug("  - '{Title}' (ID: {Id}) - kept ({Reason})", 
+                        item.Name ?? "Unknown", item.Id, reason);
+                }
+            }
+            
+            var itemsWithData = mediaItems
                 .Where(i => !string.IsNullOrWhiteSpace(i.Name) && i.PremiereDate.HasValue)
-                .GroupBy(i => new { Title = i.Name.Trim().ToLowerInvariant(), Date = i.PremiereDate.Value })
-                .Select(g => g.First()).ToList();
-
-            return uniqueItems.Concat(withoutDateOrTitle).ToList();
+                .ToList();
+                
+            var grouped = itemsWithData
+                .GroupBy(i => new { Title = i.Name!.Trim().ToLowerInvariant(), Date = i.PremiereDate!.Value })
+                .ToList();
+                
+            var uniqueItems = new List<BaseItem>();
+            var duplicatesRemoved = 0;
+            
+            foreach (var group in grouped)
+            {
+                var items = group.ToList();
+                var kept = items.First();
+                uniqueItems.Add(kept);
+                
+                if (items.Count > 1)
+                {
+                    duplicatesRemoved += items.Count - 1;
+                    var itemType = kept is Movie ? "Movie" : kept is Series ? "Series" : "Item";
+                    _logger.LogDebug("Duplicate {Type} found - '{Title}' ({Date}):", 
+                        itemType, kept.Name, kept.PremiereDate!.Value.ToShortDateString());
+                    _logger.LogDebug("  ✓ Keeping: ID {Id} from '{Path}'", 
+                        kept.Id, kept.Path ?? "Unknown path");
+                    
+                    foreach (var duplicate in items.Skip(1))
+                    {
+                        _logger.LogDebug("  ✗ Removing duplicate: ID {Id} from '{Path}'", 
+                            duplicate.Id, duplicate.Path ?? "Unknown path");
+                    }
+                }
+            }
+            
+            var result = uniqueItems.Concat(withoutDateOrTitle).ToList();
+            
+            _logger.LogDebug("Deduplication complete: {Original} items → {Final} items ({Removed} duplicates removed)", 
+                mediaItems.Count, result.Count, duplicatesRemoved);
+            
+            return result;
         }
         
           // Helper method to handle numeric comparisons for ratings
