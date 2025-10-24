@@ -429,7 +429,7 @@ namespace Jellyfin.Plugin.AutoCollections
             var itemsToAdd = wantedMediaItems
                 .Where(item => !existingItemIds.Contains(item.Id))
                 .OrderByDescending(item => item.ProductionYear)
-                .OrderByDescending(item => item.PremiereDate ?? DateTime.MinValue)
+                .ThenByDescending(item => item.PremiereDate ?? DateTime.MinValue)
                 .ToList();
 
             if (itemsToAdd.Count > 0)
