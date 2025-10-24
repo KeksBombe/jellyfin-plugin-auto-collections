@@ -991,8 +991,18 @@ namespace Jellyfin.Plugin.AutoCollections
             await AddWantedMediaItems(collection, mediaItems);
             await SortCollectionBy(collection, SortOrder.Descending);
             
+            // Re-fetch the collection to get its updated children
+            var updatedCollection = _libraryManager.GetItemById(collection.Id) as BoxSet;
+
             // Validate collection content
-            ValidateCollectionContent(collection, mediaItems);
+            if (updatedCollection != null)
+            {
+                ValidateCollectionContent(updatedCollection, mediaItems);
+            }
+            else
+            {
+                _logger.LogWarning("Could not re-fetch collection {CollectionName} for validation.", collection.Name);
+            }
             
             // Only set the photo for the collection if it's newly created
             if (isNewCollection)
@@ -1134,8 +1144,18 @@ namespace Jellyfin.Plugin.AutoCollections
             await AddWantedMediaItems(collection, mediaItems);
             await SortCollectionBy(collection, SortOrder.Descending);
             
+            // Re-fetch the collection to get its updated children
+            var updatedCollection = _libraryManager.GetItemById(collection.Id) as BoxSet;
+
             // Validate collection content
-            ValidateCollectionContent(collection, mediaItems);
+            if (updatedCollection != null)
+            {
+                ValidateCollectionContent(updatedCollection, mediaItems);
+            }
+            else
+            {
+                _logger.LogWarning("Could not re-fetch collection {CollectionName} for validation.", collection.Name);
+            }
             
             // Only set the photo for the collection if it's newly created
             if (isNewCollection && mediaItems.Count > 0)
@@ -1693,9 +1713,19 @@ namespace Jellyfin.Plugin.AutoCollections
             await RemoveUnwantedMediaItems(collection, allMatchingItems);
             await AddWantedMediaItems(collection, allMatchingItems);
             await SortCollectionBy(collection, SortOrder.Descending);
-            
+
+            // Re-fetch the collection to get its updated children
+            var updatedCollection = _libraryManager.GetItemById(collection.Id) as BoxSet;
+
             // Validate collection content
-            ValidateCollectionContent(collection, allMatchingItems);
+            if (updatedCollection != null)
+            {
+                ValidateCollectionContent(updatedCollection, allMatchingItems);
+            }
+            else
+            {
+                _logger.LogWarning("Could not re-fetch expression collection {CollectionName} for validation.", collection.Name);
+            }
             
             // Set collection image if it's a new collection
             if (isNewCollection && allMatchingItems.Count > 0)
