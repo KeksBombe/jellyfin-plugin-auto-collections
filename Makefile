@@ -1,4 +1,4 @@
-export VERSION := 0.0.3.2
+export VERSION := 0.0.3.21
 export GITHUB_REPO := KeksBombe/jellyfin-plugin-auto-collections
 export FILE := auto-collections-${VERSION}.zip
 
