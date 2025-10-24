@@ -872,7 +872,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
                 {
                     Name = collectionName,
-                    IsLocked = true
+                    IsLocked = false
                 });
                 collection.Tags = new[] { "Autocollection" };
                 isNewCollection = true;
@@ -1054,7 +1054,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
                 {
                     Name = collectionName,
-                    IsLocked = true
+                    IsLocked = false
                 });
                 collection.Tags = new[] { "Autocollection" };
                 isNewCollection = true;
@@ -1626,7 +1626,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
                 {
                     Name = collectionName,
-                    IsLocked = true
+                    IsLocked = false
                 });
                 collection.Tags = new[] { "Autocollection" };
                 isNewCollection = true;
