@@ -531,6 +531,82 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
 
+        private void ValidateCollectionContent(BoxSet collection, IEnumerable<BaseItem> expectedItems)
+        {
+            // Get the actual items in the collection
+            var actualItems = collection.GetLinkedChildren().ToList();
+            var expectedItemsList = expectedItems.ToList();
+            
+            // Create sets for comparison
+            var actualItemIds = actualItems.Select(i => i.Id).ToHashSet();
+            var expectedItemIds = expectedItemsList.Select(i => i.Id).ToHashSet();
+            
+            // Count statistics
+            var expectedCount = expectedItemIds.Count;
+            var actualCount = actualItemIds.Count;
+            var matchingCount = actualItemIds.Intersect(expectedItemIds).Count();
+            var missingCount = expectedItemIds.Except(actualItemIds).Count();
+            var extraCount = actualItemIds.Except(expectedItemIds).Count();
+            
+            // Log validation summary
+            _logger.LogInformation(
+                "Collection '{CollectionName}' validation: Expected={Expected}, Actual={Actual}, Matching={Matching}, Missing={Missing}, Extra={Extra}",
+                collection.Name, expectedCount, actualCount, matchingCount, missingCount, extraCount);
+            
+            // Log details if there are discrepancies
+            if (missingCount > 0)
+            {
+                _logger.LogWarning("Collection '{CollectionName}' is missing {Count} expected items:", 
+                    collection.Name, missingCount);
+                
+                var missingItems = expectedItemsList.Where(i => !actualItemIds.Contains(i.Id)).Take(10);
+                foreach (var item in missingItems)
+                {
+                    var itemType = item is Movie ? "Movie" : item is Series ? "Series" : "Item";
+                    var year = item.ProductionYear?.ToString() ?? "Unknown";
+                    _logger.LogWarning("  - Missing {Type}: '{Title}' ({Year}) (ID: {Id})", 
+                        itemType, item.Name, year, item.Id);
+                }
+                
+                if (missingCount > 10)
+                {
+                    _logger.LogWarning("  ... and {Count} more missing items", missingCount - 10);
+                }
+            }
+            
+            if (extraCount > 0)
+            {
+                _logger.LogWarning("Collection '{CollectionName}' has {Count} unexpected items:", 
+                    collection.Name, extraCount);
+                
+                var extraItems = actualItems.Where(i => !expectedItemIds.Contains(i.Id)).Take(10);
+                foreach (var item in extraItems)
+                {
+                    var itemType = item is Movie ? "Movie" : item is Series ? "Series" : "Item";
+                    var year = item.ProductionYear?.ToString() ?? "Unknown";
+                    _logger.LogWarning("  - Extra {Type}: '{Title}' ({Year}) (ID: {Id})", 
+                        itemType, item.Name, year, item.Id);
+                }
+                
+                if (extraCount > 10)
+                {
+                    _logger.LogWarning("  ... and {Count} more extra items", extraCount - 10);
+                }
+            }
+            
+            // Log success if everything matches
+            if (missingCount == 0 && extraCount == 0 && actualCount == expectedCount)
+            {
+                _logger.LogInformation("✓ Collection '{CollectionName}' content validated successfully - all {Count} items match",
+                    collection.Name, actualCount);
+            }
+            else
+            {
+                _logger.LogWarning("✗ Collection '{CollectionName}' content validation failed - discrepancies found",
+                    collection.Name);
+            }
+        }
+
         // ================================================================
         // COLLECTION RETRIEVAL METHODS
         // ================================================================
@@ -915,6 +991,9 @@ namespace Jellyfin.Plugin.AutoCollections
             await AddWantedMediaItems(collection, mediaItems);
             await SortCollectionBy(collection, SortOrder.Descending);
             
+            // Validate collection content
+            ValidateCollectionContent(collection, mediaItems);
+            
             // Only set the photo for the collection if it's newly created
             if (isNewCollection)
             {
@@ -1054,6 +1133,9 @@ namespace Jellyfin.Plugin.AutoCollections
             await RemoveUnwantedMediaItems(collection, mediaItems);
             await AddWantedMediaItems(collection, mediaItems);
             await SortCollectionBy(collection, SortOrder.Descending);
+            
+            // Validate collection content
+            ValidateCollectionContent(collection, mediaItems);
             
             // Only set the photo for the collection if it's newly created
             if (isNewCollection && mediaItems.Count > 0)
@@ -1611,6 +1693,9 @@ namespace Jellyfin.Plugin.AutoCollections
             await RemoveUnwantedMediaItems(collection, allMatchingItems);
             await AddWantedMediaItems(collection, allMatchingItems);
             await SortCollectionBy(collection, SortOrder.Descending);
+            
+            // Validate collection content
+            ValidateCollectionContent(collection, allMatchingItems);
             
             // Set collection image if it's a new collection
             if (isNewCollection && allMatchingItems.Count > 0)
