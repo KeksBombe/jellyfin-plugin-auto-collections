@@ -9,6 +9,70 @@
         "category": "General",
         "versions": [
             {
+                "version": "0.0.3.25",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.25)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.25/auto-collections-0.0.3.25.zip",
+                "checksum": "8611bae88157af3622c4252de62fea01",
+                "timestamp": "2025-10-24T22:26:18Z"
+            },
+            {
+                "version": "0.0.3.24",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.24)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.24/auto-collections-0.0.3.24.zip",
+                "checksum": "db7b32db768f13297a03a68dca82eaac",
+                "timestamp": "2025-10-24T22:14:31Z"
+            },
+            {
+                "version": "0.0.3.23",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.23)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.23/auto-collections-0.0.3.23.zip",
+                "checksum": "20f9148e42419df5100b3bc69617d0ce",
+                "timestamp": "2025-10-24T21:57:48Z"
+            },
+            {
+                "version": "0.0.3.22",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.22)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.22/auto-collections-0.0.3.22.zip",
+                "checksum": "44343e3c7ab85edc9ccb10c32d6e732b",
+                "timestamp": "2025-10-24T21:49:01Z"
+            },
+            {
+                "version": "0.0.3.21",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.21)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.21/auto-collections-0.0.3.21.zip",
+                "checksum": "65d55462acc299f2df73b6b3d53a5aab",
+                "timestamp": "2025-10-24T21:25:27Z"
+            },
+            {
+                "version": "0.0.3.2",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.2)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.2/auto-collections-0.0.3.2.zip",
+                "checksum": "6e7c2b3d610fe5c0ec68b8acac6d60e9",
+                "timestamp": "2025-10-23T05:58:04Z"
+            },
+            {
+                "version": "0.0.3.1",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.1)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.1/auto-collections-0.0.3.1.zip",
+                "checksum": "6e6d9042de08f8c344ef6b2e84894985",
+                "timestamp": "2025-10-21T19:39:43Z"
+            },
+            {
+                "version": "0.0.3.0",
+                "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.3.0)\n",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/download/0.0.3.0/auto-collections-0.0.3.0.zip",
+                "checksum": "491365e45f7eb8f243597b31eea339e3",
+                "timestamp": "2025-10-21T19:17:25Z"
+            },
+            {
                 "version": "0.0.2.67",
                 "changelog": "- See the full changelog at [GitHub](https://github.com/KeksBombe/jellyfin-plugin-auto-collections/releases/tag/0.0.2.67)\n",
                 "targetAbi": "10.9.9.0",

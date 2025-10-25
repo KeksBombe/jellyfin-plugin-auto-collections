@@ -52,10 +52,12 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 // If we have existing TitleMatchPairs or ExpressionCollections, 
                 // this is likely an existing installation - mark as initialized without adding defaults
+#pragma warning disable CS0618 // Type or member is obsolete
                 bool hasExistingConfig = (Configuration.TitleMatchPairs != null && Configuration.TitleMatchPairs.Count > 0) ||
                                         (Configuration.ExpressionCollections != null && Configuration.ExpressionCollections.Count > 0) ||
                                         (Configuration.TagTitlePairs != null && Configuration.TagTitlePairs.Count > 0) ||
                                         (Configuration.Tags != null && Configuration.Tags.Length > 0);
+#pragma warning restore CS0618 // Type or member is obsolete
                 
                 if (hasExistingConfig)
                 {

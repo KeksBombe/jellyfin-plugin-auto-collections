@@ -1,4 +1,4 @@
-export VERSION := 0.0.2.67
+export VERSION := 0.0.3.25
 export GITHUB_REPO := KeksBombe/jellyfin-plugin-auto-collections
 export FILE := auto-collections-${VERSION}.zip
 
@@ -6,7 +6,7 @@ build:
 	dotnet build
 
 zip:
-	zip "${FILE}" Jellyfin.Plugin.AutoCollections/bin/Debug/net8.0/Jellyfin.Plugin.AutoCollections.dll
+	zip "${FILE}" Jellyfin.Plugin.AutoCollections/bin/Debug/net9.0/Jellyfin.Plugin.AutoCollections.dll
 
 csum:
 	md5sum "${FILE} ""
