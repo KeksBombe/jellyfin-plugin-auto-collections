@@ -14,6 +14,7 @@ using System;
 using System.Collections.Generic;
 using Jellyfin.Plugin.AutoCollections.Configuration;
 using System.Text.Json.Serialization;
+using System.Text.Encodings.Web;
 
 namespace Jellyfin.Plugin.AutoCollections.Api
 {
@@ -83,7 +84,8 @@ namespace Jellyfin.Plugin.AutoCollections.Api
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
             
             var json = JsonSerializer.Serialize(exportData, options); // Serialize the anonymous object

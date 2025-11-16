@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.AutoCollections.Configuration
 {
@@ -178,9 +179,11 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
 
         // Make ParsedExpression and ParseErrors non-serializable
         [System.Xml.Serialization.XmlIgnore]
+        [JsonIgnore]
         public ExpressionNode ParsedExpression { get; set; }
 
         [System.Xml.Serialization.XmlIgnore]
+        [JsonIgnore]
         public List<string> ParseErrors { get; set; }
 
         // Add parameterless constructor for XML serialization
