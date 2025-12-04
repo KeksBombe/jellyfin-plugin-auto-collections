@@ -38,7 +38,7 @@ The Auto Collections plugin enables you to create smart collections that automat
 - **All**: Include both movies and TV shows
 
 #### Rating-Based Filtering
-- **Parental Rating**: Filter by age ratings (G, PG, PG-13, R, etc.)
+- **Parental Rating**: Filter by age ratings (G, PG, PG-13, R, etc.) - uses exact matching
 - **Community Rating**: Match by user community ratings (0-10 scale)
 - **Critics Rating**: Filter by professional critic scores
 - **Custom Rating**: Use Jellyfin's custom rating field (supports numeric comparisons)
@@ -196,7 +196,7 @@ Day-based comparisons for temporal criteria:
      - `PRODUCTIONLOCATION "location"` / `LOCATION "location"` / `COUNTRY "location"` - Match items by production country/location
 
      **Rating Filters:**
-     - `PARENTALRATING "rating"` / `PARENTAL "rating"` / `RATING "rating"` - Match items with specific parental rating (e.g., "PG-13", "R")
+     - `PARENTALRATING "rating"` / `PARENTAL "rating"` / `RATING "rating"` - Match items with specific parental rating (exact match, e.g., "PG" matches only "PG", not "PG-13")
      - `COMMUNITYRATING "value"` / `USERRATING "value"` - Match items by community rating (supports comparison operators)
      - `CRITICSRATING "value"` / `CRITICS "value"` - Match items by critics rating (supports comparison operators)
      - `CUSTOMRATING "value"` / `CUSTOM "value"` - Match by custom rating (string match or numeric comparisons if numeric)

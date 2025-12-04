@@ -1503,7 +1503,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 // Content rating and parental guidance criteria
                 case Configuration.CriteriaType.ParentalRating:
                     return !string.IsNullOrEmpty(movie.OfficialRating) && 
-                           movie.OfficialRating.Contains(value, comparison);
+                           movie.OfficialRating.Equals(value, comparison);
                              case Configuration.CriteriaType.CommunityRating:
                     return CompareNumericValue(movie.CommunityRating, value);                case Configuration.CriteriaType.CriticsRating:
                     return CompareNumericValue(movie.CriticRating, value);
@@ -1613,7 +1613,7 @@ namespace Jellyfin.Plugin.AutoCollections
                            
                 case Configuration.CriteriaType.ParentalRating:
                     return !string.IsNullOrEmpty(series.OfficialRating) && 
-                           series.OfficialRating.Contains(value, comparison);
+                           series.OfficialRating.Equals(value, comparison);
                              case Configuration.CriteriaType.CommunityRating:
                     return CompareNumericValue(series.CommunityRating, value);
                       case Configuration.CriteriaType.CriticsRating:
