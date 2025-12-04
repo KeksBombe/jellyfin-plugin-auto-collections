@@ -24,6 +24,7 @@ namespace Jellyfin.Plugin.AutoCollections
             IProviderManager providerManager,
             ILibraryManager libraryManager,
             IUserDataManager userDataManager,
+            IUserManager userManager,
             ILoggerFactory loggerFactory)
             : base(appPaths, xmlSerializer)
         {
@@ -33,6 +34,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 collectionManager,
                 libraryManager,
                 userDataManager,
+                userManager,
                 loggerFactory.CreateLogger<AutoCollectionsManager>(),
                 appPaths);
 

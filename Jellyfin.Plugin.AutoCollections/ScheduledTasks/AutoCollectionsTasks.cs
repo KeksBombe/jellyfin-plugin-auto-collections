@@ -16,10 +16,24 @@ namespace Jellyfin.Plugin.AutoCollections.ScheduledTasks
         private readonly ILogger<AutoCollectionsManager> _logger;
         private readonly AutoCollectionsManager _syncAutoCollectionsManager;
 
-        public ExecuteAutoCollectionsTask(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
+        public ExecuteAutoCollectionsTask(
+            IProviderManager providerManager, 
+            ICollectionManager collectionManager, 
+            ILibraryManager libraryManager, 
+            IUserDataManager userDataManager,
+            IUserManager userManager,
+            ILogger<AutoCollectionsManager> logger, 
+            IApplicationPaths applicationPaths)
         {
             _logger = logger;
-            _syncAutoCollectionsManager = new AutoCollectionsManager(providerManager, collectionManager, libraryManager, logger, applicationPaths);
+            _syncAutoCollectionsManager = new AutoCollectionsManager(
+                providerManager, 
+                collectionManager, 
+                libraryManager, 
+                userDataManager,
+                userManager,
+                logger, 
+                applicationPaths);
         }
 
         public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)

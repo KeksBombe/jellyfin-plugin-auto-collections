@@ -38,11 +38,20 @@ namespace Jellyfin.Plugin.AutoCollections.Api
             IProviderManager providerManager,
             ICollectionManager collectionManager,
             ILibraryManager libraryManager,
+            IUserDataManager userDataManager,
+            IUserManager userManager,
             ILogger<AutoCollectionsManager> logger,
             IApplicationPaths applicationPaths
         )
         {
-            _syncAutoCollectionsManager = new AutoCollectionsManager(providerManager, collectionManager, libraryManager, logger, applicationPaths);
+            _syncAutoCollectionsManager = new AutoCollectionsManager(
+                providerManager, 
+                collectionManager, 
+                libraryManager, 
+                userDataManager,
+                userManager,
+                logger, 
+                applicationPaths);
             _logger = logger;
         }        /// <summary>
         /// Creates Auto collections.

@@ -40,30 +40,42 @@ namespace Jellyfin.Plugin.AutoCollections
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
         private readonly IUserDataManager? _userDataManager;
+        private readonly IUserManager? _userManager;
         private readonly Timer _timer;
         private readonly ILogger<AutoCollectionsManager> _logger;
         private readonly string _pluginDirectory;
+        
+        // Cache for person-to-media lookups during expression evaluation
+        // Key: (personName, personType, caseSensitive), Value: HashSet of movie IDs
+        private Dictionary<(string, string, bool), HashSet<Guid>>? _personToMoviesCache;
+        // Key: (personName, personType, caseSensitive), Value: HashSet of series IDs
+        private Dictionary<(string, string, bool), HashSet<Guid>>? _personToSeriesCache;
+        // Cache for item's people to avoid repeated DB calls
+        // Key: item ID, Value: list of (personName, personType) tuples
+        private Dictionary<Guid, List<(string Name, string Type)>>? _itemPeopleCache;
 
-        // Constructor with IUserDataManager for full functionality
-        public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
+        // Constructor with IUserDataManager and IUserManager for full functionality
+        public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserManager userManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
         {
             _providerManager = providerManager;
             _collectionManager = collectionManager;
             _libraryManager = libraryManager;
             _userDataManager = userDataManager;
+            _userManager = userManager;
             _logger = logger;
             _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
             _pluginDirectory = Path.Combine(applicationPaths.DataPath, "Autocollections");
             Directory.CreateDirectory(_pluginDirectory);
         }
 
-        // Constructor without IUserDataManager for backward compatibility
+        // Constructor without IUserDataManager/IUserManager for backward compatibility
         public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
         {
             _providerManager = providerManager;
             _collectionManager = collectionManager;
             _libraryManager = libraryManager;
             _userDataManager = null; // Will be null, but methods will handle this gracefully
+            _userManager = null;
             _logger = logger;
             _timer = new Timer(_ => OnTimerElapsed(), null, Timeout.Infinite, Timeout.Infinite);
             _pluginDirectory = Path.Combine(applicationPaths.DataPath, "Autocollections");
@@ -347,23 +359,11 @@ namespace Jellyfin.Plugin.AutoCollections
                             series.Studios != null && series.Studios.Any(studio => 
                                 studio.Contains(matchString, comparison))),
                         
-                        Configuration.MatchType.Actor => _libraryManager.GetItemList(new InternalItemsQuery
-                        {
-                            IncludeItemTypes = new[] { BaseItemKind.Series },
-                            IsVirtualItem = false,
-                            Recursive = true,
-                            Person = matchString,
-                            PersonTypes = new[] { "Actor" }
-                        }).OfType<Series>(),
+                        // Use GetSeriesWithPerson which properly verifies the person's role in each series
+                        Configuration.MatchType.Actor => GetSeriesWithPerson(matchString, "Actor", caseSensitive),
                         
-                        Configuration.MatchType.Director => _libraryManager.GetItemList(new InternalItemsQuery
-                        {
-                            IncludeItemTypes = new[] { BaseItemKind.Series },
-                            IsVirtualItem = false,
-                            Recursive = true,
-                            Person = matchString,
-                            PersonTypes = new[] { "Director" }
-                        }).OfType<Series>(),
+                        // Use GetSeriesWithPerson which properly verifies the person's role in each series
+                        Configuration.MatchType.Director => GetSeriesWithPerson(matchString, "Director", caseSensitive),
                         
                         _ => allSeries.Where(series => 
                             series.Name != null && series.Name.Contains(matchString, comparison)) // Default to title match
@@ -1195,15 +1195,111 @@ namespace Jellyfin.Plugin.AutoCollections
         // ================================================================
         // This section contains helper methods for searching media items
         // based on person associations (actors, directors).
+        
+        // Initialize person-to-media cache for efficient expression evaluation
+        private void InitializePersonCache()
+        {
+            _personToMoviesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
+            _personToSeriesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
+            _itemPeopleCache = new Dictionary<Guid, List<(string Name, string Type)>>();
+        }
+        
+        // Clear person-to-media cache after expression evaluation is complete
+        private void ClearPersonCache()
+        {
+            _personToMoviesCache = null;
+            _personToSeriesCache = null;
+            _itemPeopleCache = null;
+        }
+        
+        // Get cached people for an item (movie or series)
+        private List<(string Name, string Type)> GetCachedPeopleForItem(BaseItem item)
+        {
+            if (_itemPeopleCache == null)
+            {
+                // No cache - get directly
+                var people = _libraryManager.GetPeople(item);
+                return people.Select(p => (p.Name, p.Type.ToString())).ToList();
+            }
+            
+            if (!_itemPeopleCache.TryGetValue(item.Id, out var cachedPeople))
+            {
+                // Cache miss - populate
+                var people = _libraryManager.GetPeople(item);
+                cachedPeople = people.Select(p => (p.Name, p.Type.ToString())).ToList();
+                _itemPeopleCache[item.Id] = cachedPeople;
+            }
+            
+            return cachedPeople;
+        }
+        
+        // Check if a movie has a specific person (uses cache during expression evaluation)
+        private bool MovieHasPerson(Guid movieId, string personNameToMatch, string personType, bool caseSensitive)
+        {
+            var cacheKey = (personNameToMatch, personType, caseSensitive);
+            
+            // If cache is active, check or populate it
+            if (_personToMoviesCache != null)
+            {
+                if (!_personToMoviesCache.TryGetValue(cacheKey, out var cachedMovieIds))
+                {
+                    // Cache miss - populate for this person
+                    _logger.LogInformation("Loading movies with {PersonType} matching '{PersonName}'...", 
+                        personType, personNameToMatch);
+                    var movies = GetMoviesWithPerson(personNameToMatch, personType, caseSensitive);
+                    cachedMovieIds = movies.Select(m => m.Id).ToHashSet();
+                    _personToMoviesCache[cacheKey] = cachedMovieIds;
+                    _logger.LogInformation("Found {Count} movies with {PersonType} matching '{PersonName}'", 
+                        cachedMovieIds.Count, personType, personNameToMatch);
+                }
+                
+                return cachedMovieIds.Contains(movieId);
+            }
+            
+            // No cache - do direct lookup (shouldn't happen during expression evaluation)
+            var matchingMovies = GetMoviesWithPerson(personNameToMatch, personType, caseSensitive);
+            return matchingMovies.Any(m => m.Id == movieId);
+        }
+        
+        // Check if a series has a specific person (uses cache during expression evaluation)
+        private bool SeriesHasPerson(Guid seriesId, string personNameToMatch, string personType, bool caseSensitive)
+        {
+            var cacheKey = (personNameToMatch, personType, caseSensitive);
+            
+            // If cache is active, check or populate it
+            if (_personToSeriesCache != null)
+            {
+                if (!_personToSeriesCache.TryGetValue(cacheKey, out var cachedSeriesIds))
+                {
+                    // Cache miss - populate for this person
+                    _logger.LogInformation("Loading series with {PersonType} matching '{PersonName}'...", 
+                        personType, personNameToMatch);
+                    var seriesList = GetSeriesWithPerson(personNameToMatch, personType, caseSensitive);
+                    cachedSeriesIds = seriesList.Select(s => s.Id).ToHashSet();
+                    _personToSeriesCache[cacheKey] = cachedSeriesIds;
+                    _logger.LogInformation("Found {Count} series with {PersonType} matching '{PersonName}'", 
+                        cachedSeriesIds.Count, personType, personNameToMatch);
+                }
+                
+                return cachedSeriesIds.Contains(seriesId);
+            }
+            
+            // No cache - do direct lookup (shouldn't happen during expression evaluation)
+            var matchingSeries = GetSeriesWithPerson(personNameToMatch, personType, caseSensitive);
+            return matchingSeries.Any(s => s.Id == seriesId);
+        }
+
         // Helper method to find movies with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
+        // This method verifies the actual role of the person in each movie, not just
+        // the person's general type in the database
         private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
 
-            // First get all persons of the specified type (actor or director)
+            // First get all persons matching the name
             var persons = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Person },
@@ -1212,52 +1308,64 @@ namespace Jellyfin.Plugin.AutoCollections
                 .Where(p => p?.Name != null && p.Name.Contains(personNameToMatch, comparison))
                 .ToList();
             
-            _logger.LogInformation("Found {Count} {PersonType}s matching '{NameToMatch}'", 
-                persons.Count, personType, personNameToMatch);
+            _logger.LogDebug("Found {Count} person(s) matching '{NameToMatch}' for {PersonType} search", 
+                persons.Count, personNameToMatch, personType);
             
             if (!persons.Any())
             {
                 return Enumerable.Empty<Movie>();
             }
             
-            // For each matching person, find their movies and combine results
+            // For each matching person, find their movies where they have the correct role
             var result = new HashSet<Movie>();
             foreach (var person in persons)
             {
-                if (person?.Name != null)
+                if (person?.Name == null) continue;
+                
+                // Get all movies that include this person (without filtering by type in the query)
+                var moviesWithPerson = _libraryManager.GetItemList(new InternalItemsQuery
                 {
-                    // Use exact name matching for the person's actual name
-                    var movies = _libraryManager.GetItemList(new InternalItemsQuery
-                    {
-                        IncludeItemTypes = new[] { BaseItemKind.Movie },
-                        IsVirtualItem = false,
-                        Recursive = true,
-                        Person = person.Name, // Exact name
-                        PersonTypes = new[] { personType }
-                    }).Select(m => m as Movie);
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    Person = person.Name
+                }).OfType<Movie>();
+                
+                foreach (var movie in moviesWithPerson)
+                {
+                    // Get the people associated with this movie and check if the person has the correct role
+                    // Use cached people if available
+                    var peopleInMovie = GetCachedPeopleForItem(movie);
+                    var hasCorrectRole = peopleInMovie.Any(p => 
+                        p.Name.Equals(person.Name, StringComparison.OrdinalIgnoreCase) &&
+                        p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase));
                     
-                    foreach (var movie in movies)
+                    if (hasCorrectRole)
                     {
-                        if (movie != null)
-                        {
-                            result.Add(movie);
-                        }
+                        result.Add(movie);
+                        _logger.LogDebug("  + Movie '{Title}' has {PersonName} as {Role}", 
+                            movie.Name, person.Name, personType);
                     }
                 }
             }
+            
+            _logger.LogDebug("Found {Count} movies where person(s) matching '{NameToMatch}' have role '{PersonType}'", 
+                result.Count, personNameToMatch, personType);
             
             return result;
         }
         
         // Helper method to find series with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
+        // This method verifies the actual role of the person in each series, not just
+        // the person's general type in the database
         private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
                 
-            // First get all persons of the specified type (actor or director)
+            // First get all persons matching the name
             var persons = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Person },
@@ -1266,39 +1374,49 @@ namespace Jellyfin.Plugin.AutoCollections
                 .Where(p => p?.Name != null && p.Name.Contains(personNameToMatch, comparison))
                 .ToList();
             
-            _logger.LogInformation("Found {Count} {PersonType}s matching '{NameToMatch}'", 
-                persons.Count, personType, personNameToMatch);
+            _logger.LogDebug("Found {Count} person(s) matching '{NameToMatch}' for {PersonType} search", 
+                persons.Count, personNameToMatch, personType);
             
             if (!persons.Any())
             {
                 return Enumerable.Empty<Series>();
             }
             
-            // For each matching person, find their series and combine results
+            // For each matching person, find their series where they have the correct role
             var result = new HashSet<Series>();
             foreach (var person in persons)
             {
-                if (person?.Name != null)
+                if (person?.Name == null) continue;
+                
+                // Get all series that include this person (without filtering by type in the query)
+                var seriesWithPerson = _libraryManager.GetItemList(new InternalItemsQuery
                 {
-                    // Use exact name matching for the person's actual name
-                    var series = _libraryManager.GetItemList(new InternalItemsQuery
-                    {
-                        IncludeItemTypes = new[] { BaseItemKind.Series },
-                        IsVirtualItem = false,
-                        Recursive = true,
-                        Person = person.Name, // Exact name
-                        PersonTypes = new[] { personType }
-                    }).Select(s => s as Series);
+                    IncludeItemTypes = new[] { BaseItemKind.Series },
+                    IsVirtualItem = false,
+                    Recursive = true,
+                    Person = person.Name
+                }).OfType<Series>();
+                
+                foreach (var series in seriesWithPerson)
+                {
+                    // Get the people associated with this series and check if the person has the correct role
+                    // Use cached people if available
+                    var peopleInSeries = GetCachedPeopleForItem(series);
+                    var hasCorrectRole = peopleInSeries.Any(p => 
+                        p.Name.Equals(person.Name, StringComparison.OrdinalIgnoreCase) &&
+                        p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase));
                     
-                    foreach (var s in series)
+                    if (hasCorrectRole)
                     {
-                        if (s != null)
-                        {
-                            result.Add(s);
-                        }
+                        result.Add(series);
+                        _logger.LogDebug("  + Series '{Title}' has {PersonName} as {Role}", 
+                            series.Name, person.Name, personType);
                     }
                 }
             }
+            
+            _logger.LogDebug("Found {Count} series where person(s) matching '{NameToMatch}' have role '{PersonType}'", 
+                result.Count, personNameToMatch, personType);
             
             return result;
         }
@@ -1330,14 +1448,12 @@ namespace Jellyfin.Plugin.AutoCollections
                            movie.Studios.Any(s => s.Contains(value, comparison));
                     
                 case Configuration.CriteriaType.Actor:
-                    // Find matching actors for this movie using the existing method
-                    var matchingActorMovies = GetMoviesWithPerson(value, "Actor", caseSensitive);
-                    return matchingActorMovies.Any(m => m.Id == movie.Id);
+                    // Use cached lookup for actors during expression evaluation
+                    return MovieHasPerson(movie.Id, value, "Actor", caseSensitive);
                     
                 case Configuration.CriteriaType.Director:
-                    // Find matching directors for this movie using the existing method
-                    var matchingDirectorMovies = GetMoviesWithPerson(value, "Director", caseSensitive);
-                    return matchingDirectorMovies.Any(m => m.Id == movie.Id);
+                    // Use cached lookup for directors during expression evaluation
+                    return MovieHasPerson(movie.Id, value, "Director", caseSensitive);
                     
                 // Media type criteria
                 case Configuration.CriteriaType.Movie:
@@ -1444,30 +1560,12 @@ namespace Jellyfin.Plugin.AutoCollections
                            series.Studios.Any(s => s.Contains(value, comparison));
                     
                 case Configuration.CriteriaType.Actor:
-                    // Find all series with matching actor name
-                    var actorSeries = _libraryManager.GetItemList(new InternalItemsQuery
-                    {
-                        IncludeItemTypes = new[] { BaseItemKind.Series },
-                        IsVirtualItem = false,
-                        Recursive = true,
-                        Person = value,
-                        PersonTypes = new[] { "Actor" }
-                    }).OfType<Series>();
-                    
-                    return actorSeries.Any(s => s.Id == series.Id);
+                    // Use cached lookup for actors during expression evaluation
+                    return SeriesHasPerson(series.Id, value, "Actor", caseSensitive);
                     
                 case Configuration.CriteriaType.Director:
-                    // Find all series with matching director name
-                    var directorSeries = _libraryManager.GetItemList(new InternalItemsQuery
-                    {
-                        IncludeItemTypes = new[] { BaseItemKind.Series },
-                        IsVirtualItem = false,
-                        Recursive = true,
-                        Person = value,
-                        PersonTypes = new[] { "Director" }
-                    }).OfType<Series>();
-                    
-                    return directorSeries.Any(s => s.Id == series.Id);
+                    // Use cached lookup for directors during expression evaluation
+                    return SeriesHasPerson(series.Id, value, "Director", caseSensitive);
                     
                 case Configuration.CriteriaType.Movie:
                     // Always false for series
@@ -1660,47 +1758,58 @@ namespace Jellyfin.Plugin.AutoCollections
             
             if (expressionCollection.ParsedExpression != null)
             {
-                _logger.LogDebug("Evaluating movies against expression...");
+                // Initialize person-to-media cache for efficient evaluation
+                InitializePersonCache();
                 
-                matchingMovies = allMovies
-                    .Where(movie => movie != null)
-                    .Where(movie => 
-                    {
-                        var matches = expressionCollection.ParsedExpression.Evaluate(
-                            (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
-                        );
-                        
-                        if (matches)
-                        {
-                            var year = movie.ProductionYear?.ToString() ?? "Unknown year";
-                            _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
-                                movie.Name, year, movie.Id);
-                        }
-                        
-                        return matches;
-                    })
-                    .ToList();
-                
-                _logger.LogDebug("Evaluating series against expression...");
+                try
+                {
+                    _logger.LogDebug("Evaluating movies against expression...");
                     
-                matchingSeries = allSeries
-                    .Where(series => series != null)
-                    .Where(series => 
-                    {
-                        var matches = expressionCollection.ParsedExpression.Evaluate(
-                            (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
-                        );
-                        
-                        if (matches)
+                    matchingMovies = allMovies
+                        .Where(movie => movie != null)
+                        .Where(movie => 
                         {
-                            var year = series.ProductionYear?.ToString() ?? "Unknown year";
-                            _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
-                                series.Name, year, series.Id);
-                        }
+                            var matches = expressionCollection.ParsedExpression.Evaluate(
+                                (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
+                            );
+                            
+                            if (matches)
+                            {
+                                var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                                _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
+                                    movie.Name, year, movie.Id);
+                            }
+                            
+                            return matches;
+                        })
+                        .ToList();
+                    
+                    _logger.LogDebug("Evaluating series against expression...");
                         
-                        return matches;
-                    })
-                    .ToList();
+                    matchingSeries = allSeries
+                        .Where(series => series != null)
+                        .Where(series => 
+                        {
+                            var matches = expressionCollection.ParsedExpression.Evaluate(
+                                (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
+                            );
+                            
+                            if (matches)
+                            {
+                                var year = series.ProductionYear?.ToString() ?? "Unknown year";
+                                _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
+                                    series.Name, year, series.Id);
+                            }
+                            
+                            return matches;
+                        })
+                        .ToList();
+                }
+                finally
+                {
+                    // Always clear the cache after evaluation
+                    ClearPersonCache();
+                }
             }
             
             _logger.LogInformation("Expression matched {MovieCount} movies and {SeriesCount} series", 
@@ -1937,33 +2046,42 @@ namespace Jellyfin.Plugin.AutoCollections
         {
             try
             {
-                // If user data manager is not available, assume item is unplayed
-                if (_userDataManager == null)
+                // If user data manager or user manager is not available, log warning and assume item is unplayed
+                if (_userDataManager == null || _userManager == null)
                 {
-                    _logger.LogWarning("UserDataManager not available, assuming item is unplayed");
+                    _logger.LogWarning("UserDataManager or UserManager not available for item {ItemName}, assuming item is unplayed", item.Name);
                     return true;
                 }
 
-                // For now, we'll use a simplified approach since GetAllUsers may not be available
-                // We can try to check the item's played status in a different way
+                // Get all users and check if ANY of them have played this item
+                var users = _userManager.Users.ToList();
                 
-                // Try to get the play count from the item itself
-                // Most items have a UserDataKeys property that can help us determine play state
-                var userDataKeys = item.GetUserDataKeys();
-                if (userDataKeys != null && userDataKeys.Count > 0)
+                if (users.Count == 0)
                 {
-                    // If we can't reliably determine the play state without GetAllUsers,
-                    // we'll assume it's unplayed for safety
+                    _logger.LogDebug("No users found, assuming item {ItemName} is unplayed", item.Name);
                     return true;
                 }
+
+                // Check each user's play state for this item
+                foreach (var user in users)
+                {
+                    var userData = _userDataManager.GetUserData(user, item);
+                    if (userData != null && userData.Played)
+                    {
+                        // At least one user has played this item, so it's not "unplayed"
+                        _logger.LogDebug("Item {ItemName} has been played by user {UserName}", item.Name, user.Username);
+                        return false;
+                    }
+                }
                 
-                // No user has played this item (fallback)
+                // No user has played this item
+                _logger.LogDebug("Item {ItemName} is unplayed by all users", item.Name);
                 return true;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error checking play state for item {ItemName}", item.Name);
-                // If we can't determine the play state, assume it's unplayed
+                // If we can't determine the play state, assume it's unplayed (safer default)
                 return true;
             }
         }
