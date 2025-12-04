@@ -1,5 +1,8 @@
 # Jellyfin Auto Collections Plugin
 
+## Share your config or find something cool!
+https://github.com/KeksBombe/jellyfin-auto-collections-configs/tree/main
+
 A powerful Jellyfin plugin that automatically creates and maintains dynamic collections based on flexible criteria. This enhanced fork extends the original Smart Collections plugin with advanced boolean expression support and comprehensive filtering options.
 
 ## 🎯 Overview
