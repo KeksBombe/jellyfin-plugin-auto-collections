@@ -632,52 +632,84 @@ namespace Jellyfin.Plugin.AutoCollections
         // progress handling.
         public async Task ExecuteAutoCollectionsNoProgress()
         {
+            // Call the main method with a dummy progress reporter and non-cancellable token
+            var dummyProgress = new Progress<double>();
+            await ExecuteAutoCollections(dummyProgress, CancellationToken.None);
+        }
+
+        public async Task ExecuteAutoCollections(IProgress<double> progress, CancellationToken cancellationToken)
+        {
             _logger.LogInformation("Performing ExecuteAutoCollections");
             
             // Get title match pairs from configuration - this is the basic approach
             var titleMatchPairs = Plugin.Instance!.Configuration.TitleMatchPairs;
-            _logger.LogInformation($"Starting execution of Auto collections for {titleMatchPairs.Count} title match pairs");
+            // Get expression collections - this is the advanced approach
+            var expressionCollections = Plugin.Instance!.Configuration.ExpressionCollections;
+            
+            int totalCollections = titleMatchPairs.Count + expressionCollections.Count;
+            int processedCollections = 0;
+            
+            _logger.LogInformation($"Starting execution of Auto collections: {titleMatchPairs.Count} title match pairs + {expressionCollections.Count} expression collections = {totalCollections} total");
+            
+            // Report initial progress
+            progress.Report(0);
 
             foreach (var titleMatchPair in titleMatchPairs)
             {
+                // Check for cancellation
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 try
                 {
-                    _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch}");
+                    _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
                     await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("Auto Collections task was cancelled");
+                    throw;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
                     // Continue with next title-match pair even if one fails
-                    continue;
                 }
+                
+                processedCollections++;
+                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                progress.Report(progressPercentage);
+                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
             }
-            
-            // Get expression collections - this is the advanced approach
-            var expressionCollections = Plugin.Instance!.Configuration.ExpressionCollections;
-            _logger.LogInformation($"Starting execution of Advanced collections for {expressionCollections.Count} expression collections");
 
             foreach (var expressionCollection in expressionCollections)
             {
+                // Check for cancellation
+                cancellationToken.ThrowIfCancellationRequested();
+                
                 try
                 {
-                    _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName}");
+                    _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
                     await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("Auto Collections task was cancelled");
+                    throw;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
                     // Continue with next expression collection even if one fails
-                    continue;
                 }
+                
+                processedCollections++;
+                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                progress.Report(progressPercentage);
+                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
             }
 
-            _logger.LogInformation("Completed execution of all Auto collections");
-        }
-
-        public async Task ExecuteAutoCollections(IProgress<double> progress, CancellationToken cancellationToken)
-        {
-            await ExecuteAutoCollectionsNoProgress();
+            progress.Report(100);
+            _logger.LogInformation($"Completed execution of all {totalCollections} Auto collections");
         }
 
         // ================================================================
