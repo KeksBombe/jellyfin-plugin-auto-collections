@@ -1354,13 +1354,14 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 if (person?.Name == null) continue;
                 
-                // Get all movies that include this person (without filtering by type in the query)
+                // Get all movies that include this person with the specific role type
                 var moviesWithPerson = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    Person = person.Name
+                    Person = person.Name,
+                    PersonTypes = new[] { personType }
                 }).OfType<Movie>();
                 
                 foreach (var movie in moviesWithPerson)
@@ -1420,13 +1421,14 @@ namespace Jellyfin.Plugin.AutoCollections
             {
                 if (person?.Name == null) continue;
                 
-                // Get all series that include this person (without filtering by type in the query)
+                // Get all series that include this person with the specific role type
                 var seriesWithPerson = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
                     Recursive = true,
-                    Person = person.Name
+                    Person = person.Name,
+                    PersonTypes = new[] { personType }
                 }).OfType<Series>();
                 
                 foreach (var series in seriesWithPerson)
