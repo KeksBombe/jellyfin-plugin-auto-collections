@@ -1323,8 +1323,8 @@ namespace Jellyfin.Plugin.AutoCollections
 
         // Helper method to find movies with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
-        // This method verifies the actual role of the person in each movie, not just
-        // the person's general type in the database
+        // This method uses Jellyfin's PersonTypes query parameter to ensure only
+        // movies where the person has the specified role are returned
         private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
@@ -1366,19 +1366,9 @@ namespace Jellyfin.Plugin.AutoCollections
                 
                 foreach (var movie in moviesWithPerson)
                 {
-                    // Get the people associated with this movie and check if the person has the correct role
-                    // Use cached people if available
-                    var peopleInMovie = GetCachedPeopleForItem(movie);
-                    var hasCorrectRole = peopleInMovie.Any(p => 
-                        p.Name.Equals(person.Name, StringComparison.OrdinalIgnoreCase) &&
-                        p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase));
-                    
-                    if (hasCorrectRole)
-                    {
-                        result.Add(movie);
-                        _logger.LogDebug("  + Movie '{Title}' has {PersonName} as {Role}", 
-                            movie.Name, person.Name, personType);
-                    }
+                    result.Add(movie);
+                    _logger.LogDebug("  + Movie '{Title}' has {PersonName} as {Role}", 
+                        movie.Name, person.Name, personType);
                 }
             }
             
@@ -1390,8 +1380,8 @@ namespace Jellyfin.Plugin.AutoCollections
         
         // Helper method to find series with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
-        // This method verifies the actual role of the person in each series, not just
-        // the person's general type in the database
+        // This method uses Jellyfin's PersonTypes query parameter to ensure only
+        // series where the person has the specified role are returned
         private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
@@ -1433,19 +1423,9 @@ namespace Jellyfin.Plugin.AutoCollections
                 
                 foreach (var series in seriesWithPerson)
                 {
-                    // Get the people associated with this series and check if the person has the correct role
-                    // Use cached people if available
-                    var peopleInSeries = GetCachedPeopleForItem(series);
-                    var hasCorrectRole = peopleInSeries.Any(p => 
-                        p.Name.Equals(person.Name, StringComparison.OrdinalIgnoreCase) &&
-                        p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase));
-                    
-                    if (hasCorrectRole)
-                    {
-                        result.Add(series);
-                        _logger.LogDebug("  + Series '{Title}' has {PersonName} as {Role}", 
-                            series.Name, person.Name, personType);
-                    }
+                    result.Add(series);
+                    _logger.LogDebug("  + Series '{Title}' has {PersonName} as {Role}", 
+                        series.Name, person.Name, personType);
                 }
             }
             
