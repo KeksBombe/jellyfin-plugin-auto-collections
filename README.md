@@ -25,6 +25,7 @@ The Auto Collections plugin enables you to create smart collections that automat
 
 #### Content Metadata
 - **Title**: Match by words or phrases in titles
+- **Filename**: Match by words in the filename
 - **Genre**: Group content by genre
 - **Studio**: Collect content from specific studios
 - **Actor**: Find all content featuring specific actors
@@ -69,6 +70,7 @@ Here are the REAL keywords you can use in expressions:
 
 **Content Criteria:**
 - `TITLE` - Match by title
+- `FILENAME` - Match by filename
 - `GENRE` - Match by genre
 - `STUDIO` - Match by studio
 - `ACTOR` - Match by actor
@@ -188,6 +190,7 @@ Day-based comparisons for temporal criteria:
 
      **Content Metadata Filters:**
      - `TITLE "text"` - Match items with "text" in the title
+     - `FILENAME "text"` - Match items with "text" in the filename
      - `GENRE "name"` - Match items with "name" genre
      - `STUDIO "name"` - Match items from "name" studio
      - `ACTOR "name"` - Match items with "name" actor
@@ -233,6 +236,7 @@ Day-based comparisons for temporal criteria:
 #### Complex Filtering
 - `(GENRE "Comedy" AND YEAR ">=2020") OR (GENRE "Drama" AND CRITICSRATING ">80")` - Recent comedies or critically acclaimed dramas
 - `MOVIE AND COMMUNITYRATING ">8.0" AND NOT GENRE "Documentary"` - Highly rated movies excluding documentaries
+- `FILENAME "REMUX" OR (FILENAME "2160p" AND (FILENAME "DV" OR FILENAME "HDR"))` – Only 4k HDR content, based on the filename.
 
 #### Geographic and Language Filtering
 - `PRODUCTIONLOCATION "Japan" AND (GENRE "Animation" OR LANG "Japanese")` - Japanese animated content
