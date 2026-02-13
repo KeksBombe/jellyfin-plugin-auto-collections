@@ -1454,6 +1454,9 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
 
                 var allMovies = _allMoviesCache;
+                
+                // Filter movies based on cached people data
+                var matchingMovies = allMovies
                     .Where(movie =>
                     {
                         var people = GetCachedPeopleForItem(movie);
@@ -1548,6 +1551,9 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
 
                 var allSeries = _allSeriesCache;
+                
+                // Filter series based on cached people data
+                var matchingSeries = allSeries
                     .Where(series =>
                     {
                         // Try to get people from the pre-loaded cache; if missing, fall back to the cache helper
