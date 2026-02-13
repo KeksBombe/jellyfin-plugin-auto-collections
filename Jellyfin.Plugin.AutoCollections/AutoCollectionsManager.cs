@@ -1454,15 +1454,12 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
 
                 var allMovies = _allMoviesCache;
-                
-                // Filter movies based on cached people data
-                var matchingMovies = allMovies
-                    .Where(movie => 
+                    .Where(movie =>
                     {
                         var people = GetCachedPeopleForItem(movie);
-                        
-                        return people.Any(p => 
-                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) && 
+
+                        return people.Any(p =>
+                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) &&
                             p.Name.Contains(personNameToMatch, comparison));
                     })
                     .ToList();
