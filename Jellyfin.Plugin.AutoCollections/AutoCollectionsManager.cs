@@ -1284,14 +1284,14 @@ namespace Jellyfin.Plugin.AutoCollections
                 IncludeItemTypes = new[] { BaseItemKind.Movie },
                 IsVirtualItem = false,
                 Recursive = true
-            }).OfType<Movie>().ToList();
+            }).Cast<Movie>().ToList();
             
             _allSeriesCache = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Series },
                 IsVirtualItem = false,
                 Recursive = true
-            }).OfType<Series>().ToList();
+            }).Cast<Series>().ToList();
             
             _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to pre-load", 
                 _allMoviesCache.Count, _allSeriesCache.Count);
@@ -1415,7 +1415,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true
-                }).OfType<Movie>();
+                }).Cast<Movie>();
                 
                 // Filter movies based on cached people data
                 var matchingMovies = allMovies
@@ -1473,7 +1473,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     Person = person.Name,
                     PersonTypes = new[] { personType }
-                }).OfType<Movie>();
+                }).Cast<Movie>();
                 
                 foreach (var movie in moviesWithPerson)
                 {
@@ -1510,7 +1510,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
                     Recursive = true
-                }).OfType<Series>();
+                }).Cast<Series>();
                 
                 // Filter series based on cached people data
                 var matchingSeries = allSeries
@@ -1568,7 +1568,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     Person = person.Name,
                     PersonTypes = new[] { personType }
-                }).OfType<Series>();
+                }).Cast<Series>();
                 
                 foreach (var series in seriesWithPerson)
                 {
