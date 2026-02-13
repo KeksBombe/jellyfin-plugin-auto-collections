@@ -654,62 +654,73 @@ namespace Jellyfin.Plugin.AutoCollections
             // Report initial progress
             progress.Report(0);
 
-            foreach (var titleMatchPair in titleMatchPairs)
+            // Initialize person-to-media cache once for all collections to enable cache reuse
+            InitializePersonCache();
+            
+            try
             {
-                // Check for cancellation
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                try
+                foreach (var titleMatchPair in titleMatchPairs)
                 {
-                    _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
-                    await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    try
+                    {
+                        _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
+                        await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Auto Collections task was cancelled");
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
+                        // Continue with next title-match pair even if one fails
+                    }
+                    
+                    processedCollections++;
+                    double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                    progress.Report(progressPercentage);
+                    _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
                 }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Auto Collections task was cancelled");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
-                    // Continue with next title-match pair even if one fails
-                }
-                
-                processedCollections++;
-                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
-                progress.Report(progressPercentage);
-                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
-            }
 
-            foreach (var expressionCollection in expressionCollections)
+                foreach (var expressionCollection in expressionCollections)
+                {
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    try
+                    {
+                        _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
+                        await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Auto Collections task was cancelled");
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
+                        // Continue with next expression collection even if one fails
+                    }
+                    
+                    processedCollections++;
+                    double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                    progress.Report(progressPercentage);
+                    _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                }
+
+                progress.Report(100);
+                _logger.LogInformation($"Completed execution of all {totalCollections} Auto collections");
+            }
+            finally
             {
-                // Check for cancellation
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                try
-                {
-                    _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
-                    await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Auto Collections task was cancelled");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
-                    // Continue with next expression collection even if one fails
-                }
-                
-                processedCollections++;
-                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
-                progress.Report(progressPercentage);
-                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                // Clear person cache after all collections have been processed
+                ClearPersonCache();
             }
-
-            progress.Report(100);
-            _logger.LogInformation($"Completed execution of all {totalCollections} Auto collections");
         }
 
         // ================================================================
@@ -1772,58 +1783,47 @@ namespace Jellyfin.Plugin.AutoCollections
             
             if (expressionCollection.ParsedExpression != null)
             {
-                // Initialize person-to-media cache for efficient evaluation
-                InitializePersonCache();
+                _logger.LogDebug("Evaluating movies against expression...");
                 
-                try
-                {
-                    _logger.LogDebug("Evaluating movies against expression...");
-                    
-                    matchingMovies = allMovies
-                        .Where(movie => movie != null)
-                        .Where(movie => 
-                        {
-                            var matches = expressionCollection.ParsedExpression.Evaluate(
-                                (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
-                            );
-                            
-                            if (matches)
-                            {
-                                var year = movie.ProductionYear?.ToString() ?? "Unknown year";
-                                _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
-                                    movie.Name, year, movie.Id);
-                            }
-                            
-                            return matches;
-                        })
-                        .ToList();
-                    
-                    _logger.LogDebug("Evaluating series against expression...");
+                matchingMovies = allMovies
+                    .Where(movie => movie != null)
+                    .Where(movie => 
+                    {
+                        var matches = expressionCollection.ParsedExpression.Evaluate(
+                            (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
+                        );
                         
-                    matchingSeries = allSeries
-                        .Where(series => series != null)
-                        .Where(series => 
+                        if (matches)
                         {
-                            var matches = expressionCollection.ParsedExpression.Evaluate(
-                                (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
-                            );
-                            
-                            if (matches)
-                            {
-                                var year = series.ProductionYear?.ToString() ?? "Unknown year";
-                                _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
-                                    series.Name, year, series.Id);
-                            }
-                            
-                            return matches;
-                        })
-                        .ToList();
-                }
-                finally
-                {
-                    // Always clear the cache after evaluation
-                    ClearPersonCache();
-                }
+                            var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
+                                movie.Name, year, movie.Id);
+                        }
+                        
+                        return matches;
+                    })
+                    .ToList();
+                
+                _logger.LogDebug("Evaluating series against expression...");
+                    
+                matchingSeries = allSeries
+                    .Where(series => series != null)
+                    .Where(series => 
+                    {
+                        var matches = expressionCollection.ParsedExpression.Evaluate(
+                            (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
+                        );
+                        
+                        if (matches)
+                        {
+                            var year = series.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
+                                series.Name, year, series.Id);
+                        }
+                        
+                        return matches;
+                    })
+                    .ToList();
             }
             
             _logger.LogInformation("Expression matched {MovieCount} movies and {SeriesCount} series", 
