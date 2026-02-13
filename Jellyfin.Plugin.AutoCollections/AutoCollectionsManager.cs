@@ -53,6 +53,9 @@ namespace Jellyfin.Plugin.AutoCollections
         // Cache for item's people to avoid repeated DB calls
         // Key: item ID, Value: list of (personName, personType) tuples
         private Dictionary<Guid, List<(string Name, string Type)>>? _itemPeopleCache;
+        // Cache for all movies and series to avoid repeated library queries
+        private List<Movie>? _allMoviesCache;
+        private List<Series>? _allSeriesCache;
 
         // Constructor with IUserDataManager and IUserManager for full functionality
         public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserManager userManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
@@ -1248,6 +1251,8 @@ namespace Jellyfin.Plugin.AutoCollections
             _personToMoviesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
             _personToSeriesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
             _itemPeopleCache = new Dictionary<Guid, List<(string Name, string Type)>>();
+            _allMoviesCache = null;
+            _allSeriesCache = null;
         }
         
         // Clear person-to-media cache after expression evaluation is complete
@@ -1256,6 +1261,8 @@ namespace Jellyfin.Plugin.AutoCollections
             _personToMoviesCache = null;
             _personToSeriesCache = null;
             _itemPeopleCache = null;
+            _allMoviesCache = null;
+            _allSeriesCache = null;
         }
         
         // Pre-load all person-to-media mappings for all movies and series
@@ -1271,15 +1278,15 @@ namespace Jellyfin.Plugin.AutoCollections
             _logger.LogInformation("Pre-loading all person-to-media mappings for performance optimization...");
             var stopwatch = Stopwatch.StartNew();
             
-            // Get all movies and series from the library
-            var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
+            // Get all movies and series from the library and cache them
+            _allMoviesCache = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie },
                 IsVirtualItem = false,
                 Recursive = true
             }).OfType<Movie>().ToList();
             
-            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
+            _allSeriesCache = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Series },
                 IsVirtualItem = false,
@@ -1287,10 +1294,10 @@ namespace Jellyfin.Plugin.AutoCollections
             }).OfType<Series>().ToList();
             
             _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to pre-load", 
-                allMovies.Count, allSeries.Count);
+                _allMoviesCache.Count, _allSeriesCache.Count);
             
             // Pre-load movies with their people
-            foreach (var movie in allMovies)
+            foreach (var movie in _allMoviesCache)
             {
                 var people = _libraryManager.GetPeople(movie);
                 var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
@@ -1298,7 +1305,7 @@ namespace Jellyfin.Plugin.AutoCollections
             }
             
             // Pre-load series with their people
-            foreach (var series in allSeries)
+            foreach (var series in _allSeriesCache)
             {
                 var people = _libraryManager.GetPeople(series);
                 var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
@@ -1307,7 +1314,7 @@ namespace Jellyfin.Plugin.AutoCollections
             
             stopwatch.Stop();
             _logger.LogInformation("Pre-loaded person mappings for {TotalItems} items in {ElapsedMs}ms", 
-                allMovies.Count + allSeries.Count, stopwatch.ElapsedMilliseconds);
+                _allMoviesCache.Count + _allSeriesCache.Count, stopwatch.ElapsedMilliseconds);
         }
         
         // Get cached people for an item (movie or series)
@@ -1402,8 +1409,8 @@ namespace Jellyfin.Plugin.AutoCollections
                 _logger.LogDebug("Using pre-loaded cache to find movies with {PersonType} matching '{PersonName}'", 
                     personType, personNameToMatch);
                 
-                // Get all movies from the library
-                var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
+                // Use cached movie list if available, otherwise query the library
+                var allMovies = _allMoviesCache ?? _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
@@ -1497,8 +1504,8 @@ namespace Jellyfin.Plugin.AutoCollections
                 _logger.LogDebug("Using pre-loaded cache to find series with {PersonType} matching '{PersonName}'", 
                     personType, personNameToMatch);
                 
-                // Get all series from the library
-                var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
+                // Use cached series list if available, otherwise query the library
+                var allSeries = _allSeriesCache ?? _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
