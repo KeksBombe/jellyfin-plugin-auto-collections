@@ -1551,15 +1551,21 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
 
                 var allSeries = _allSeriesCache;
-                
-                // Filter series based on cached people data
-                var matchingSeries = allSeries
-                    .Where(series => 
+                    .Where(series =>
                     {
-                        var people = GetCachedPeopleForItem(series);
-                        
-                        return people.Any(p => 
-                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) && 
+                        // Try to get people from the pre-loaded cache; if missing, fall back to the cache helper
+                        if (!_itemPeopleCache.TryGetValue(series.Id, out var people) || people == null)
+                        {
+                            people = GetCachedPeopleForItem(series);
+                        }
+
+                        if (people == null)
+                        {
+                            return false;
+                        }
+
+                        return people.Any(p =>
+                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) &&
                             p.Name.Contains(personNameToMatch, comparison));
                     })
                     .ToList();
