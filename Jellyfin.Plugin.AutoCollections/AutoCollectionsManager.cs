@@ -657,6 +657,9 @@ namespace Jellyfin.Plugin.AutoCollections
             // Initialize person-to-media cache once for all collections to enable cache reuse
             InitializePersonCache();
             
+            // Pre-load all person mappings for optimal performance
+            PreloadAllPersonMappings();
+            
             try
             {
                 foreach (var titleMatchPair in titleMatchPairs)
@@ -1255,6 +1258,58 @@ namespace Jellyfin.Plugin.AutoCollections
             _itemPeopleCache = null;
         }
         
+        // Pre-load all person-to-media mappings for all movies and series
+        // This dramatically reduces query overhead by building inverse indexes
+        private void PreloadAllPersonMappings()
+        {
+            if (_personToMoviesCache == null || _personToSeriesCache == null || _itemPeopleCache == null)
+            {
+                _logger.LogWarning("Cache not initialized before pre-loading. Initializing now.");
+                InitializePersonCache();
+            }
+            
+            _logger.LogInformation("Pre-loading all person-to-media mappings for performance optimization...");
+            var stopwatch = Stopwatch.StartNew();
+            
+            // Get all movies and series from the library
+            var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                IsVirtualItem = false,
+                Recursive = true
+            }).OfType<Movie>().ToList();
+            
+            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Series },
+                IsVirtualItem = false,
+                Recursive = true
+            }).OfType<Series>().ToList();
+            
+            _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to pre-load", 
+                allMovies.Count, allSeries.Count);
+            
+            // Pre-load movies with their people
+            foreach (var movie in allMovies)
+            {
+                var people = _libraryManager.GetPeople(movie);
+                var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
+                _itemPeopleCache![movie.Id] = peopleList;
+            }
+            
+            // Pre-load series with their people
+            foreach (var series in allSeries)
+            {
+                var people = _libraryManager.GetPeople(series);
+                var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
+                _itemPeopleCache![series.Id] = peopleList;
+            }
+            
+            stopwatch.Stop();
+            _logger.LogInformation("Pre-loaded person mappings for {TotalItems} items in {ElapsedMs}ms", 
+                allMovies.Count + allSeries.Count, stopwatch.ElapsedMilliseconds);
+        }
+        
         // Get cached people for an item (movie or series)
         private List<(string Name, string Type)> GetCachedPeopleForItem(BaseItem item)
         {
@@ -1334,14 +1389,52 @@ namespace Jellyfin.Plugin.AutoCollections
 
         // Helper method to find movies with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
-        // This method uses Jellyfin's PersonTypes query parameter to ensure only
-        // movies where the person has the specified role are returned
+        // This method uses the pre-loaded cache when available, falling back to direct queries
         private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
 
+            // If cache is pre-loaded, use it for much better performance
+            if (_itemPeopleCache != null && _itemPeopleCache.Count > 0)
+            {
+                _logger.LogDebug("Using pre-loaded cache to find movies with {PersonType} matching '{PersonName}'", 
+                    personType, personNameToMatch);
+                
+                // Get all movies from the library
+                var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Movie },
+                    IsVirtualItem = false,
+                    Recursive = true
+                }).OfType<Movie>();
+                
+                // Filter movies based on cached people data
+                var matchingMovies = allMovies
+                    .Where(movie => 
+                    {
+                        if (!_itemPeopleCache.TryGetValue(movie.Id, out var people))
+                        {
+                            return false;
+                        }
+                        
+                        return people.Any(p => 
+                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) && 
+                            p.Name.Contains(personNameToMatch, comparison));
+                    })
+                    .ToList();
+                
+                _logger.LogDebug("Found {Count} movies with {PersonType} matching '{PersonName}' using cache", 
+                    matchingMovies.Count, personType, personNameToMatch);
+                
+                return matchingMovies;
+            }
+
+            // Fallback to original implementation if cache not available
+            _logger.LogDebug("Cache not available, using direct query for movies with {PersonType} matching '{PersonName}'", 
+                personType, personNameToMatch);
+            
             // First get all persons matching the name
             var persons = _libraryManager.GetItemList(new InternalItemsQuery
             {
@@ -1391,13 +1484,51 @@ namespace Jellyfin.Plugin.AutoCollections
         
         // Helper method to find series with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
-        // This method uses Jellyfin's PersonTypes query parameter to ensure only
-        // series where the person has the specified role are returned
+        // This method uses the pre-loaded cache when available, falling back to direct queries
         private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
+            
+            // If cache is pre-loaded, use it for much better performance
+            if (_itemPeopleCache != null && _itemPeopleCache.Count > 0)
+            {
+                _logger.LogDebug("Using pre-loaded cache to find series with {PersonType} matching '{PersonName}'", 
+                    personType, personNameToMatch);
+                
+                // Get all series from the library
+                var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Series },
+                    IsVirtualItem = false,
+                    Recursive = true
+                }).OfType<Series>();
+                
+                // Filter series based on cached people data
+                var matchingSeries = allSeries
+                    .Where(series => 
+                    {
+                        if (!_itemPeopleCache.TryGetValue(series.Id, out var people))
+                        {
+                            return false;
+                        }
+                        
+                        return people.Any(p => 
+                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) && 
+                            p.Name.Contains(personNameToMatch, comparison));
+                    })
+                    .ToList();
+                
+                _logger.LogDebug("Found {Count} series with {PersonType} matching '{PersonName}' using cache", 
+                    matchingSeries.Count, personType, personNameToMatch);
+                
+                return matchingSeries;
+            }
+            
+            // Fallback to original implementation if cache not available
+            _logger.LogDebug("Cache not available, using direct query for series with {PersonType} matching '{PersonName}'", 
+                personType, personNameToMatch);
                 
             // First get all persons matching the name
             var persons = _libraryManager.GetItemList(new InternalItemsQuery
