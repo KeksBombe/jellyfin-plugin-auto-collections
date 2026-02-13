@@ -657,14 +657,22 @@ namespace Jellyfin.Plugin.AutoCollections
             // Report initial progress
             progress.Report(0);
 
-            // Initialize person-to-media cache once for all collections to enable cache reuse
-            InitializePersonCache();
-            
-            // Pre-load all person mappings for optimal performance
-            PreloadAllPersonMappings();
-            
             try
             {
+                // Initialize person-to-media cache once for all collections to enable cache reuse
+                InitializePersonCache();
+                
+                // Only pre-load person mappings if any collection uses Actor or Director criteria
+                if (NeedsPersonData(expressionCollections))
+                {
+                    _logger.LogInformation("Detected Actor/Director criteria in collections, pre-loading person mappings...");
+                    PreloadAllPersonMappings(cancellationToken);
+                }
+                else
+                {
+                    _logger.LogInformation("No Actor/Director criteria detected, skipping person mapping pre-load");
+                }
+                
                 foreach (var titleMatchPair in titleMatchPairs)
                 {
                     // Check for cancellation
@@ -1266,14 +1274,17 @@ namespace Jellyfin.Plugin.AutoCollections
         }
         
         // Pre-load all person-to-media mappings for all movies and series
-        // This dramatically reduces query overhead by building inverse indexes
-        private void PreloadAllPersonMappings()
+        // This populates the item-to-people cache to reduce repeated GetPeople() calls
+        private void PreloadAllPersonMappings(CancellationToken cancellationToken)
         {
             if (_personToMoviesCache == null || _personToSeriesCache == null || _itemPeopleCache == null)
             {
                 _logger.LogWarning("Cache not initialized before pre-loading. Initializing now.");
                 InitializePersonCache();
             }
+            
+            // Check for cancellation before starting expensive operation
+            cancellationToken.ThrowIfCancellationRequested();
             
             _logger.LogInformation("Pre-loading all person-to-media mappings for performance optimization...");
             var stopwatch = Stopwatch.StartNew();
@@ -1299,6 +1310,7 @@ namespace Jellyfin.Plugin.AutoCollections
             // Pre-load movies with their people
             foreach (var movie in _allMoviesCache)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var people = _libraryManager.GetPeople(movie);
                 var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
                 _itemPeopleCache![movie.Id] = peopleList;
@@ -1307,6 +1319,7 @@ namespace Jellyfin.Plugin.AutoCollections
             // Pre-load series with their people
             foreach (var series in _allSeriesCache)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var people = _libraryManager.GetPeople(series);
                 var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
                 _itemPeopleCache![series.Id] = peopleList;
@@ -1315,6 +1328,26 @@ namespace Jellyfin.Plugin.AutoCollections
             stopwatch.Stop();
             _logger.LogInformation("Pre-loaded person mappings for {TotalItems} items in {ElapsedMs}ms", 
                 _allMoviesCache.Count + _allSeriesCache.Count, stopwatch.ElapsedMilliseconds);
+        }
+        
+        // Check if any expression collection uses Actor or Director criteria
+        private bool NeedsPersonData(List<Configuration.ExpressionCollection> expressionCollections)
+        {
+            foreach (var collection in expressionCollections)
+            {
+                if (string.IsNullOrEmpty(collection.Expression))
+                {
+                    continue;
+                }
+                
+                // Simple check: if expression contains ACTOR or DIRECTOR keywords
+                var upperExpression = collection.Expression.ToUpperInvariant();
+                if (upperExpression.Contains("ACTOR") || upperExpression.Contains("DIRECTOR"))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
         
         // Get cached people for an item (movie or series)
@@ -1409,22 +1442,24 @@ namespace Jellyfin.Plugin.AutoCollections
                 _logger.LogDebug("Using pre-loaded cache to find movies with {PersonType} matching '{PersonName}'", 
                     personType, personNameToMatch);
                 
-                // Use cached movie list if available, otherwise query the library
-                var allMovies = _allMoviesCache ?? _libraryManager.GetItemList(new InternalItemsQuery
+                // Ensure we only query the library once and cache the result
+                if (_allMoviesCache == null)
                 {
-                    IncludeItemTypes = new[] { BaseItemKind.Movie },
-                    IsVirtualItem = false,
-                    Recursive = true
-                }).Cast<Movie>();
+                    _allMoviesCache = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Movie },
+                        IsVirtualItem = false,
+                        Recursive = true
+                    }).Cast<Movie>().ToList();
+                }
+
+                var allMovies = _allMoviesCache;
                 
                 // Filter movies based on cached people data
                 var matchingMovies = allMovies
                     .Where(movie => 
                     {
-                        if (!_itemPeopleCache.TryGetValue(movie.Id, out var people))
-                        {
-                            return false;
-                        }
+                        var people = GetCachedPeopleForItem(movie);
                         
                         return people.Any(p => 
                             p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) && 
@@ -1504,22 +1539,24 @@ namespace Jellyfin.Plugin.AutoCollections
                 _logger.LogDebug("Using pre-loaded cache to find series with {PersonType} matching '{PersonName}'", 
                     personType, personNameToMatch);
                 
-                // Use cached series list if available, otherwise query the library
-                var allSeries = _allSeriesCache ?? _libraryManager.GetItemList(new InternalItemsQuery
+                // Ensure we only query all series once and cache the result
+                if (_allSeriesCache == null)
                 {
-                    IncludeItemTypes = new[] { BaseItemKind.Series },
-                    IsVirtualItem = false,
-                    Recursive = true
-                }).Cast<Series>();
+                    _allSeriesCache = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        IsVirtualItem = false,
+                        Recursive = true
+                    }).Cast<Series>().ToList();
+                }
+
+                var allSeries = _allSeriesCache;
                 
                 // Filter series based on cached people data
                 var matchingSeries = allSeries
                     .Where(series => 
                     {
-                        if (!_itemPeopleCache.TryGetValue(series.Id, out var people))
-                        {
-                            return false;
-                        }
+                        var people = GetCachedPeopleForItem(series);
                         
                         return people.Any(p => 
                             p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) && 
