@@ -53,6 +53,9 @@ namespace Jellyfin.Plugin.AutoCollections
         // Cache for item's people to avoid repeated DB calls
         // Key: item ID, Value: list of (personName, personType) tuples
         private Dictionary<Guid, List<(string Name, string Type)>>? _itemPeopleCache;
+        // Cache for all movies and series to avoid repeated library queries
+        private List<Movie>? _allMoviesCache;
+        private List<Series>? _allSeriesCache;
 
         // Constructor with IUserDataManager and IUserManager for full functionality
         public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserManager userManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
@@ -654,62 +657,84 @@ namespace Jellyfin.Plugin.AutoCollections
             // Report initial progress
             progress.Report(0);
 
-            foreach (var titleMatchPair in titleMatchPairs)
+            try
             {
-                // Check for cancellation
-                cancellationToken.ThrowIfCancellationRequested();
+                // Initialize person-to-media cache once for all collections to enable cache reuse
+                InitializePersonCache();
                 
-                try
+                // Only pre-load person mappings if any collection uses Actor or Director criteria
+                if (NeedsPersonData(expressionCollections))
                 {
-                    _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
-                    await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
+                    _logger.LogInformation("Detected Actor/Director criteria in collections, pre-loading person mappings...");
+                    PreloadAllPersonMappings(cancellationToken);
                 }
-                catch (OperationCanceledException)
+                else
                 {
-                    _logger.LogInformation("Auto Collections task was cancelled");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
-                    // Continue with next title-match pair even if one fails
+                    _logger.LogInformation("No Actor/Director criteria detected, skipping person mapping pre-load");
                 }
                 
-                processedCollections++;
-                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
-                progress.Report(progressPercentage);
-                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
-            }
+                foreach (var titleMatchPair in titleMatchPairs)
+                {
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    try
+                    {
+                        _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
+                        await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Auto Collections task was cancelled");
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
+                        // Continue with next title-match pair even if one fails
+                    }
+                    
+                    processedCollections++;
+                    double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                    progress.Report(progressPercentage);
+                    _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                }
 
-            foreach (var expressionCollection in expressionCollections)
+                foreach (var expressionCollection in expressionCollections)
+                {
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
+                    
+                    try
+                    {
+                        _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
+                        await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Auto Collections task was cancelled");
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
+                        // Continue with next expression collection even if one fails
+                    }
+                    
+                    processedCollections++;
+                    double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                    progress.Report(progressPercentage);
+                    _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                }
+
+                progress.Report(100);
+                _logger.LogInformation($"Completed execution of all {totalCollections} Auto collections");
+            }
+            finally
             {
-                // Check for cancellation
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                try
-                {
-                    _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
-                    await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Auto Collections task was cancelled");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
-                    // Continue with next expression collection even if one fails
-                }
-                
-                processedCollections++;
-                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
-                progress.Report(progressPercentage);
-                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                // Clear person cache after all collections have been processed
+                ClearPersonCache();
             }
-
-            progress.Report(100);
-            _logger.LogInformation($"Completed execution of all {totalCollections} Auto collections");
         }
 
         // ================================================================
@@ -1234,6 +1259,8 @@ namespace Jellyfin.Plugin.AutoCollections
             _personToMoviesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
             _personToSeriesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
             _itemPeopleCache = new Dictionary<Guid, List<(string Name, string Type)>>();
+            _allMoviesCache = null;
+            _allSeriesCache = null;
         }
         
         // Clear person-to-media cache after expression evaluation is complete
@@ -1242,6 +1269,85 @@ namespace Jellyfin.Plugin.AutoCollections
             _personToMoviesCache = null;
             _personToSeriesCache = null;
             _itemPeopleCache = null;
+            _allMoviesCache = null;
+            _allSeriesCache = null;
+        }
+        
+        // Pre-load all person-to-media mappings for all movies and series
+        // This populates the item-to-people cache to reduce repeated GetPeople() calls
+        private void PreloadAllPersonMappings(CancellationToken cancellationToken)
+        {
+            if (_personToMoviesCache == null || _personToSeriesCache == null || _itemPeopleCache == null)
+            {
+                _logger.LogWarning("Cache not initialized before pre-loading. Initializing now.");
+                InitializePersonCache();
+            }
+            
+            // Check for cancellation before starting expensive operation
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            _logger.LogInformation("Pre-loading all person-to-media mappings for performance optimization...");
+            var stopwatch = Stopwatch.StartNew();
+            
+            // Get all movies and series from the library and cache them
+            _allMoviesCache = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                IsVirtualItem = false,
+                Recursive = true
+            }).Cast<Movie>().ToList();
+            
+            _allSeriesCache = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Series },
+                IsVirtualItem = false,
+                Recursive = true
+            }).Cast<Series>().ToList();
+            
+            _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to pre-load", 
+                _allMoviesCache.Count, _allSeriesCache.Count);
+            
+            // Pre-load movies with their people
+            foreach (var movie in _allMoviesCache)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var people = _libraryManager.GetPeople(movie);
+                var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
+                _itemPeopleCache![movie.Id] = peopleList;
+            }
+            
+            // Pre-load series with their people
+            foreach (var series in _allSeriesCache)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var people = _libraryManager.GetPeople(series);
+                var peopleList = people.Select(p => (p.Name, p.Type.ToString())).ToList();
+                _itemPeopleCache![series.Id] = peopleList;
+            }
+            
+            stopwatch.Stop();
+            _logger.LogInformation("Pre-loaded person mappings for {TotalItems} items in {ElapsedMs}ms", 
+                _allMoviesCache.Count + _allSeriesCache.Count, stopwatch.ElapsedMilliseconds);
+        }
+        
+        // Check if any expression collection uses Actor or Director criteria
+        private bool NeedsPersonData(List<Configuration.ExpressionCollection> expressionCollections)
+        {
+            foreach (var collection in expressionCollections)
+            {
+                if (string.IsNullOrEmpty(collection.Expression))
+                {
+                    continue;
+                }
+                
+                // Simple check: if expression contains ACTOR or DIRECTOR keywords
+                var upperExpression = collection.Expression.ToUpperInvariant();
+                if (upperExpression.Contains("ACTOR") || upperExpression.Contains("DIRECTOR"))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
         
         // Get cached people for an item (movie or series)
@@ -1323,14 +1429,54 @@ namespace Jellyfin.Plugin.AutoCollections
 
         // Helper method to find movies with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
-        // This method uses Jellyfin's PersonTypes query parameter to ensure only
-        // movies where the person has the specified role are returned
+        // This method uses the pre-loaded cache when available, falling back to direct queries
         private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
 
+            // If cache is pre-loaded, use it for much better performance
+            if (_itemPeopleCache != null && _itemPeopleCache.Count > 0)
+            {
+                _logger.LogDebug("Using pre-loaded cache to find movies with {PersonType} matching '{PersonName}'", 
+                    personType, personNameToMatch);
+                
+                // Ensure we only query the library once and cache the result
+                if (_allMoviesCache == null)
+                {
+                    _allMoviesCache = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Movie },
+                        IsVirtualItem = false,
+                        Recursive = true
+                    }).Cast<Movie>().ToList();
+                }
+
+                var allMovies = _allMoviesCache;
+                
+                // Filter movies based on cached people data
+                var matchingMovies = allMovies
+                    .Where(movie =>
+                    {
+                        var people = GetCachedPeopleForItem(movie);
+
+                        return people.Any(p =>
+                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) &&
+                            p.Name.Contains(personNameToMatch, comparison));
+                    })
+                    .ToList();
+                
+                _logger.LogDebug("Found {Count} movies with {PersonType} matching '{PersonName}' using cache", 
+                    matchingMovies.Count, personType, personNameToMatch);
+                
+                return matchingMovies;
+            }
+
+            // Fallback to original implementation if cache not available
+            _logger.LogDebug("Cache not available, using direct query for movies with {PersonType} matching '{PersonName}'", 
+                personType, personNameToMatch);
+            
             // First get all persons matching the name
             var persons = _libraryManager.GetItemList(new InternalItemsQuery
             {
@@ -1362,7 +1508,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     Person = person.Name,
                     PersonTypes = new[] { personType }
-                }).OfType<Movie>();
+                }).Cast<Movie>();
                 
                 foreach (var movie in moviesWithPerson)
                 {
@@ -1380,13 +1526,62 @@ namespace Jellyfin.Plugin.AutoCollections
         
         // Helper method to find series with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
-        // This method uses Jellyfin's PersonTypes query parameter to ensure only
-        // series where the person has the specified role are returned
+        // This method uses the pre-loaded cache when available, falling back to direct queries
         private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
+            
+            // If cache is pre-loaded, use it for much better performance
+            if (_itemPeopleCache != null && _itemPeopleCache.Count > 0)
+            {
+                _logger.LogDebug("Using pre-loaded cache to find series with {PersonType} matching '{PersonName}'", 
+                    personType, personNameToMatch);
+                
+                // Ensure we only query all series once and cache the result
+                if (_allSeriesCache == null)
+                {
+                    _allSeriesCache = _libraryManager.GetItemList(new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        IsVirtualItem = false,
+                        Recursive = true
+                    }).Cast<Series>().ToList();
+                }
+
+                var allSeries = _allSeriesCache;
+                
+                // Filter series based on cached people data
+                var matchingSeries = allSeries
+                    .Where(series =>
+                    {
+                        // Try to get people from the pre-loaded cache; if missing, fall back to the cache helper
+                        if (!_itemPeopleCache.TryGetValue(series.Id, out var people) || people == null)
+                        {
+                            people = GetCachedPeopleForItem(series);
+                        }
+
+                        if (people == null)
+                        {
+                            return false;
+                        }
+
+                        return people.Any(p =>
+                            p.Type.Equals(personType, StringComparison.OrdinalIgnoreCase) &&
+                            p.Name.Contains(personNameToMatch, comparison));
+                    })
+                    .ToList();
+                
+                _logger.LogDebug("Found {Count} series with {PersonType} matching '{PersonName}' using cache", 
+                    matchingSeries.Count, personType, personNameToMatch);
+                
+                return matchingSeries;
+            }
+            
+            // Fallback to original implementation if cache not available
+            _logger.LogDebug("Cache not available, using direct query for series with {PersonType} matching '{PersonName}'", 
+                personType, personNameToMatch);
                 
             // First get all persons matching the name
             var persons = _libraryManager.GetItemList(new InternalItemsQuery
@@ -1419,7 +1614,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     Recursive = true,
                     Person = person.Name,
                     PersonTypes = new[] { personType }
-                }).OfType<Series>();
+                }).Cast<Series>();
                 
                 foreach (var series in seriesWithPerson)
                 {
@@ -1772,58 +1967,47 @@ namespace Jellyfin.Plugin.AutoCollections
             
             if (expressionCollection.ParsedExpression != null)
             {
-                // Initialize person-to-media cache for efficient evaluation
-                InitializePersonCache();
+                _logger.LogDebug("Evaluating movies against expression...");
                 
-                try
-                {
-                    _logger.LogDebug("Evaluating movies against expression...");
-                    
-                    matchingMovies = allMovies
-                        .Where(movie => movie != null)
-                        .Where(movie => 
-                        {
-                            var matches = expressionCollection.ParsedExpression.Evaluate(
-                                (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
-                            );
-                            
-                            if (matches)
-                            {
-                                var year = movie.ProductionYear?.ToString() ?? "Unknown year";
-                                _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
-                                    movie.Name, year, movie.Id);
-                            }
-                            
-                            return matches;
-                        })
-                        .ToList();
-                    
-                    _logger.LogDebug("Evaluating series against expression...");
+                matchingMovies = allMovies
+                    .Where(movie => movie != null)
+                    .Where(movie => 
+                    {
+                        var matches = expressionCollection.ParsedExpression.Evaluate(
+                            (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
+                        );
                         
-                    matchingSeries = allSeries
-                        .Where(series => series != null)
-                        .Where(series => 
+                        if (matches)
                         {
-                            var matches = expressionCollection.ParsedExpression.Evaluate(
-                                (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
-                            );
-                            
-                            if (matches)
-                            {
-                                var year = series.ProductionYear?.ToString() ?? "Unknown year";
-                                _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
-                                    series.Name, year, series.Id);
-                            }
-                            
-                            return matches;
-                        })
-                        .ToList();
-                }
-                finally
-                {
-                    // Always clear the cache after evaluation
-                    ClearPersonCache();
-                }
+                            var year = movie.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
+                                movie.Name, year, movie.Id);
+                        }
+                        
+                        return matches;
+                    })
+                    .ToList();
+                
+                _logger.LogDebug("Evaluating series against expression...");
+                    
+                matchingSeries = allSeries
+                    .Where(series => series != null)
+                    .Where(series => 
+                    {
+                        var matches = expressionCollection.ParsedExpression.Evaluate(
+                            (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
+                        );
+                        
+                        if (matches)
+                        {
+                            var year = series.ProductionYear?.ToString() ?? "Unknown year";
+                            _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
+                                series.Name, year, series.Id);
+                        }
+                        
+                        return matches;
+                    })
+                    .ToList();
             }
             
             _logger.LogInformation("Expression matched {MovieCount} movies and {SeriesCount} series", 
