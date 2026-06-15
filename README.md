@@ -3,11 +3,11 @@
 ## Share your config or find something cool!
 https://github.com/KeksBombe/jellyfin-auto-collections-configs/tree/main
 
-A powerful Jellyfin plugin that automatically creates and maintains dynamic collections based on flexible criteria. This enhanced fork extends the original Smart Collections plugin with advanced boolean expression support and comprehensive filtering options.
+A powerful Jellyfin plugin that automatically creates and maintains dynamic collections based on flexible criteria. This enhanced fork extends the original Smart Collections plugin with advanced boolean logic, expression-based collections, and comprehensive filtering options.
 
 ## 🎯 Overview
 
-The Auto Collections plugin enables you to create smart collections that automatically update as your library changes. Collections can be based on simple criteria or complex boolean expressions, allowing for highly specific and dynamic organization of your media library.
+The Auto Collections plugin enables you to create smart collections that automatically update as your library changes. Collections can be based on simple criteria or complex boolean expressions, allowing for sophisticated organization of your media library.
 
 ## ✨ Key Features
 
@@ -33,6 +33,7 @@ The Auto Collections plugin enables you to create smart collections that automat
 - **Studio**: Collect content from specific studios
 - **Actor**: Find all content featuring specific actors
 - **Director**: Group content by director
+- **Role**: Find content where actors play specific character roles (e.g., "Batman", "Superman")
 - **Tag**: Match items with specific tags
 - **Production Location**: Filter by country/region of origin
 
@@ -78,6 +79,7 @@ Here are the REAL keywords you can use in expressions:
 - `STUDIO` - Match by studio
 - `ACTOR` - Match by actor
 - `DIRECTOR` - Match by director
+- `ROLE` - Match by actor role (character name)
 - `TAG` - Match by tag
 
 **Media Type Criteria:**
@@ -198,6 +200,7 @@ Day-based comparisons for temporal criteria:
      - `STUDIO "name"` - Match items from "name" studio
      - `ACTOR "name"` - Match items with "name" actor
      - `DIRECTOR "name"` - Match items with "name" director
+     - `ROLE "character"` - Match items where actors play "character" (e.g., "Batman", "Superman")
      - `TAG "tag"` - Match items with "tag" in their tags
      - `PRODUCTIONLOCATION "location"` / `LOCATION "location"` / `COUNTRY "location"` - Match items by production country/location
 
@@ -241,6 +244,13 @@ Day-based comparisons for temporal criteria:
 - `MOVIE AND COMMUNITYRATING ">8.0" AND NOT GENRE "Documentary"` - Highly rated movies excluding documentaries
 - `FILENAME "REMUX" OR (FILENAME "2160p" AND (FILENAME "DV" OR FILENAME "HDR"))` – Only 4k HDR content, based on the filename.
 
+#### Actor Role Collections
+- `ROLE "Batman"` - All movies/shows where actors play Batman
+- `ROLE "Batman" AND GENRE "Action"` - Batman appearances in action content
+- `ROLE "Superman" OR ROLE "Batman"` - DC superhero content
+- `ROLE "Batman" AND COMMUNITYRATING ">7.5"` - Well-rated Batman appearances
+- `(ROLE "Batman" OR ROLE "Robin") AND STUDIO "Warner"` - Batman universe content from Warner Bros
+
 #### Geographic and Language Filtering
 - `PRODUCTIONLOCATION "Japan" AND (GENRE "Animation" OR LANG "Japanese")` - Japanese animated content
 - `LANG "French" AND NOT SUB "English"` - French content without English subtitles
@@ -248,6 +258,10 @@ Day-based comparisons for temporal criteria:
 #### Play State Collections
 - `MOVIE AND UNPLAYED AND COMMUNITYRATING ">7.5"` - Unwatched high-rated movies
 - `SHOW AND WATCHED AND GENRE "Drama"` - Watched drama series
+
+#### Combined Actor and Role Filtering
+- `ACTOR "Christian Bale" AND ROLE "Batman"` - Christian Bale's Batman appearances
+- `(ACTOR "Heath Ledger" OR ROLE "Joker") AND GENRE "Action"` - Joker-related or Heath Ledger action content
 
 ## 🔧 Configuration
 
@@ -327,6 +341,11 @@ Collections automatically receive artwork from:
 - Check for special characters in expressions
 - Validate collection names are unique
 
+#### Role Criterion Issues
+- Ensure actors in your metadata have roles assigned (check your library metadata)
+- Role matching is case-insensitive by default (use case-sensitive option for exact matching)
+- Partial role name matches are supported (e.g., "bat" will match "Batman")
+
 ### Debug Features
 - **Parse Errors**: Detailed error reporting for invalid expressions
 - **Logging**: Comprehensive logging for troubleshooting
@@ -354,4 +373,3 @@ This project maintains the same license as the original Smart Collections plugin
 ---
 
 **Note**: All images in this repository are mock-up examples for demonstration purposes only. No copyrighted material is included or referenced.
-
