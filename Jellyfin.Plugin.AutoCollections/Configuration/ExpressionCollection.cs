@@ -29,13 +29,14 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         EpisodeAirDate = 18, // Match by most recent episode air date (for TV shows)
         Unplayed = 19,  // Match unplayed items (not watched by any user)
         Watched = 20,   // Match watched items (played by at least one user)
-        Filename = 21   // Match by filename
+        Filename = 21,  // Match by filename
+        Role = 22       // Match by actor role (e.g., "Batman", "Robin")
     }
 
     // Token types for expression parsing
     public enum TokenType
     {
-        Criteria,   // TITLE, GENRE, STUDIO, ACTOR, DIRECTOR
+        Criteria,   // TITLE, GENRE, STUDIO, ACTOR, DIRECTOR, ROLE
         String,     // "string value"
         And,        // AND
         Or,         // OR
@@ -170,7 +171,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         {
             return $"NOT {Child}";
         }
-    }    // The main collection class that uses expressions
+    }
+
+    // The main collection class that uses expressions
     public class ExpressionCollection
     {
         public string CollectionName { get; set; }
@@ -292,6 +295,12 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                 if (TryMatchCriteria(expression, ref position, "DIRECTOR", out var directorToken))
                 {
                     tokens.Add(directorToken);
+                    continue;
+                }
+
+                if (TryMatchCriteria(expression, ref position, "ROLE", out var roleToken))
+                {
+                    tokens.Add(roleToken);
                     continue;
                 }
 
@@ -570,6 +579,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                             break;
                         case "ACTOR":
                             token.CriteriaType = Configuration.CriteriaType.Actor;
+                            break;
+                        case "ROLE":
+                            token.CriteriaType = Configuration.CriteriaType.Role;
                             break;
                         case "TAG":
                             token.CriteriaType = Configuration.CriteriaType.Tag;
