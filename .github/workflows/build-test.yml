@@ -36,3 +36,41 @@ jobs:
         with:
           name: auto-collections-test
           path: auto-collections-test.zip
+name: Build plugin for testing
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore Jellyfin.Plugin.AutoCollections/Jellyfin.Plugin.AutoCollections.csproj
+
+      - name: Build
+        run: dotnet build Jellyfin.Plugin.AutoCollections/Jellyfin.Plugin.AutoCollections.csproj --configuration Release --no-restore
+
+      - name: Create plugin ZIP
+        run: |
+          mkdir -p artifact
+          cp Jellyfin.Plugin.AutoCollections/bin/Release/net9.0/Jellyfin.Plugin.AutoCollections.dll artifact/
+          cd artifact
+          zip ../auto-collections-test.zip Jellyfin.Plugin.AutoCollections.dll
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-collections-test
+          path: auto-collections-test.zip
