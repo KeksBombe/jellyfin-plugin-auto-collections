@@ -1,12 +1,9 @@
 name: Build plugin for testing
 
 on:
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch to build'
-        required: true
-        default: 'main'
+  push:
+    branches:
+      - 'feature/**'
 
 jobs:
   build:
@@ -15,8 +12,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.branch }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
