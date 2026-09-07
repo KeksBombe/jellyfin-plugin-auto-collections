@@ -167,12 +167,46 @@ collection never needs editing by hand.
 - **Real-time Maintenance**: Collections stay current as library changes
 
 #### Collection Management
-- **Auto-Sorting**: Items sorted by production year and premiere date
+- **Sorting**: Choose the order of each collection - release year, date added, name, rating, runtime or random, ascending or descending
+- **Preview**: See exactly what a sync would add and remove before running it
 - **Deduplication**: Prevents duplicate entries in collections
 - **Image Assignment**: Automatically sets collection artwork from content, and never replaces artwork you set yourself
 - **Smart Naming**: Intelligent default collection names based on criteria
 - **Name Protection**: Collections are locked so metadata providers cannot rename them or swap their artwork
 - **Orphan Cleanup** (optional, off by default): Delete collections once they are removed from the configuration. Only collections created by this plugin are ever removed
+
+### Sorting
+
+Each collection has its own sort field and direction, set next to it in the plugin page.
+
+| Sort by | Notes |
+| --- | --- |
+| Release year | Default. Production year, then premiere date |
+| Date added | When the item was added to the library |
+| Name | Sort name |
+| Community rating | |
+| Runtime | |
+| Random | Reshuffled by Jellyfin each time the collection is opened |
+
+Ascending orders are handed to Jellyfin, which sorts the collection when it is viewed and keeps
+it correct as items change. Jellyfin only ever sorts a collection ascending, so descending orders
+are produced by controlling the order items are stored in instead. Both work; the ascending ones
+are simply cheaper and stay right without a sync.
+
+### Preview (dry run)
+
+Every collection has a **Preview** button, and there is a **Preview All** button above Sync.
+Nothing is written to the library by either.
+
+A preview reports the difference against what the collection holds today, not just a list of
+matches - a sync also removes items that stopped matching, and that is usually the part worth
+checking. It reads the values currently on the page, so a rule can be checked before it is saved.
+
+It flags the cases that normally mean a rule is not doing what was intended:
+
+- nothing matches, or everything currently in the collection would be removed
+- more than half the library matches
+- `AND` and `OR` are mixed without brackets, where `AND` binds first
 
 ### 📊 Configuration Management
 
@@ -216,9 +250,10 @@ collection never needs editing by hand.
 2. Choose match type: Title, Genre, Studio, Actor, Director, Writer, or Tag
 3. Set media type filter: All, Movies only, or Shows only
 4. Enter search string
-5. Configure case sensitivity
-6. Set custom collection name (optional)
-7. Click "Save" and "Sync Auto Collections"
+5. Configure case sensitivity, and tick **Exact** to require the whole value to match rather than any part of it
+6. Choose how the collection is ordered (see [Sorting](#sorting))
+7. Set custom collection name (optional)
+8. Click **Preview** to see what would happen, then "Save" and "Sync Auto Collections"
 
 ### Advanced Collections Setup
 
@@ -324,6 +359,8 @@ First-time users receive example collections:
 
 #### Collection Management
 - `POST /AutoCollections/AutoCollections` - Trigger collection sync
+- `POST /AutoCollections/Preview` - Preview one collection without changing anything
+- `POST /AutoCollections/PreviewAll` - Preview every collection in the posted configuration
 - `GET /AutoCollections/ExportConfiguration` - Export configuration as JSON
 - `POST /AutoCollections/ImportConfiguration` - Import configuration (overwrite)
 - `POST /AutoCollections/AddConfiguration` - Add configuration (merge)

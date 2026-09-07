@@ -69,6 +69,23 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         Writer = 6   // Match by writer
     }
     
+    // How the items inside a collection are ordered
+    public enum CollectionSortBy
+    {
+        ReleaseYear = 0,     // Default - production year, then premiere date
+        DateAdded = 1,       // When the item was added to the library
+        Name = 2,            // Sort name
+        CommunityRating = 3, // Community rating
+        Runtime = 4,         // Duration
+        Random = 5           // Shuffled by Jellyfin on every view
+    }
+
+    public enum CollectionSortOrder
+    {
+        Descending = 0, // Default - newest first, matching the behaviour before this was configurable
+        Ascending = 1
+    }
+
     // Media types for filtering collections
     public enum MediaTypeFilter
     {
@@ -85,6 +102,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         public bool CaseSensitive { get; set; }
         public MatchType MatchType { get; set; }
         public MediaTypeFilter MediaType { get; set; }
+        public bool ExactMatch { get; set; }
+        public CollectionSortBy SortBy { get; set; }
+        public CollectionSortOrder SortOrder { get; set; }
 
         // Add parameterless constructor for XML serialization
         public TitleMatchPair()
@@ -94,6 +114,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             CaseSensitive = false; // Default to case insensitive
             MatchType = MatchType.Title; // Default to title matching for backward compatibility
             MediaType = MediaTypeFilter.All; // Default to include all media types
+            ExactMatch = false; // Default to substring matching for backward compatibility
+            SortBy = CollectionSortBy.ReleaseYear;
+            SortOrder = CollectionSortOrder.Descending;
         }
 
         public TitleMatchPair(string titleMatch, string collectionName = null, bool caseSensitive = false, 
