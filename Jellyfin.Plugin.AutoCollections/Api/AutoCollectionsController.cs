@@ -35,6 +35,7 @@ namespace Jellyfin.Plugin.AutoCollections.Api
     /// The Auto Collections api controller.
     /// </summary>
     [ApiController]
+    [Authorize(Policy = "RequiresElevation")]
     [Route("AutoCollections")]
     [Produces(MediaTypeNames.Application.Json)]
 
