@@ -33,8 +33,12 @@ The Auto Collections plugin enables you to create smart collections that automat
 - **Studio**: Collect content from specific studios
 - **Actor**: Find all content featuring specific actors
 - **Director**: Group content by director
+- **Writer**: Group content by writer
+- **Producer**: Group content by producer
 - **Tag**: Match items with specific tags - uses exact matching
+- **Overview / Tagline**: Match words in the description or tagline
 - **Production Location**: Filter by country/region of origin
+- **Library**: Restrict a collection to one library (media folder)
 
 #### Media Type Filtering
 - **Movie**: Include only movies
@@ -50,6 +54,11 @@ The Auto Collections plugin enables you to create smart collections that automat
 #### Technical Criteria
 - **Audio Language**: Match content by audio track language
 - **Subtitle Language**: Filter by available subtitle languages
+- **Resolution**: Match by video resolution (4K, 1080p, 720p, SD)
+- **Dynamic Range**: Match by HDR, HDR10, HLG, Dolby Vision or SDR
+- **Audio Channels**: Match by channel count (stereo, 5.1, 7.1)
+- **Audio Codec**: Match by codec or track description (DTS, TrueHD, Atmos)
+- **Runtime**: Match by duration in minutes
 - **Year**: Match by production/release year
 - **Release Date**: Filter by release date with day-based comparisons
 - **Added Date**: Match by date added to library
@@ -78,7 +87,11 @@ Here are the REAL keywords you can use in expressions:
 - `STUDIO` - Match by studio
 - `ACTOR` - Match by actor
 - `DIRECTOR` - Match by director
+- `WRITER` - Match by writer
+- `PRODUCER` - Match by producer
 - `TAG` - Match by tag (exact match)
+- `OVERVIEW` / `DESCRIPTION` / `PLOT` - Match words in the description
+- `TAGLINE` - Match words in the tagline
 
 **Media Type Criteria:**
 - `MOVIE` - Match only movies
@@ -94,6 +107,18 @@ Here are the REAL keywords you can use in expressions:
 - `PRODUCTIONLOCATION` / `LOCATION` / `COUNTRY` - Match by production location
 - `LANG` - Match by audio language
 - `SUB` - Match by subtitle language
+- `LIBRARY` - Match by library (media folder) name, exact match
+
+**Quality Criteria:**
+
+These read the item's media streams. TV series carry no streams on the series itself, so
+like `LANG` and `SUB` these match movies; use them with `MOVIE` to be explicit.
+
+- `RESOLUTION` / `QUALITY` - `4K`, `1440p`, `1080p`, `720p`, `SD`
+- `HDR` / `VIDEORANGE` / `DYNAMICRANGE` - `SDR`, `HDR`, `HDR10`, `HLG`, `DOVI`
+- `AUDIOCHANNELS` / `CHANNELS` - channel count, or `stereo` / `5.1` / `7.1`
+- `AUDIOCODEC` / `ACODEC` - codec or track description, e.g. `dts`, `truehd`, `atmos`
+- `RUNTIME` / `DURATION` / `LENGTH` - runtime in minutes (supports comparisons)
 
 **Temporal Criteria:**
 - `YEAR` - Match by production year
@@ -121,10 +146,18 @@ Support for comparison operators in numeric fields:
 - `CUSTOMRATING "=7"` - Exactly 7
 
 #### Date-Based Filtering
-Day-based comparisons for temporal criteria:
-- `RELEASEDATE ">30"` - Released within last 30 days
-- `ADDEDDATE "<=7"` - Added to library within last 7 days
-- `EPISODEAIRDATE ">14"` - TV episodes aired within last 14 days
+Day-based comparisons for temporal criteria. The value is a **number of days ago**, so
+`<=` means recent and `>` means older:
+
+- `ADDEDDATE "<=7"` - Added to the library within the last 7 days
+- `ADDEDDATE "<=60"` - Added within roughly the last two months
+- `RELEASEDATE "<=1825"` - Released within roughly the last five years
+- `RELEASEDATE ">30"` - Released **more than** 30 days ago
+- `EPISODEAIRDATE "<=14"` - Newest episode aired within the last 14 days
+
+Because these are relative to the day the sync runs, such collections keep themselves
+current: items that stop matching are removed on the next run, so a "recently added"
+collection never needs editing by hand.
 
 ### 🤖 Automation Features
 
@@ -136,8 +169,10 @@ Day-based comparisons for temporal criteria:
 #### Collection Management
 - **Auto-Sorting**: Items sorted by production year and premiere date
 - **Deduplication**: Prevents duplicate entries in collections
-- **Image Assignment**: Automatically sets collection artwork from content
+- **Image Assignment**: Automatically sets collection artwork from content, and never replaces artwork you set yourself
 - **Smart Naming**: Intelligent default collection names based on criteria
+- **Name Protection**: Collections are locked so metadata providers cannot rename them or swap their artwork
+- **Orphan Cleanup** (optional, off by default): Delete collections once they are removed from the configuration. Only collections created by this plugin are ever removed
 
 ### 📊 Configuration Management
 
@@ -178,7 +213,7 @@ Day-based comparisons for temporal criteria:
 ### Simple Collections Setup
 
 1. Navigate to `Dashboard -> Plugins -> My Plugins -> Auto Collections`
-2. Choose match type: Title, Genre, Studio, Actor, Director, or Tag
+2. Choose match type: Title, Genre, Studio, Actor, Director, Writer, or Tag
 3. Set media type filter: All, Movies only, or Shows only
 4. Enter search string
 5. Configure case sensitivity
@@ -198,8 +233,13 @@ Day-based comparisons for temporal criteria:
      - `STUDIO "name"` - Match items from "name" studio
      - `ACTOR "name"` - Match items with "name" actor
      - `DIRECTOR "name"` - Match items with "name" director
+     - `WRITER "name"` - Match items with "name" writer
+     - `PRODUCER "name"` - Match items with "name" producer
      - `TAG "tag"` - Match items carrying exactly that tag (e.g., `TAG "Best Film"` does not match "Best Film Editing")
+     - `OVERVIEW "text"` / `DESCRIPTION "text"` / `PLOT "text"` - Match items whose description contains "text"
+     - `TAGLINE "text"` - Match items whose tagline contains "text"
      - `PRODUCTIONLOCATION "location"` / `LOCATION "location"` / `COUNTRY "location"` - Match items by production country/location
+     - `LIBRARY "name"` - Only include items from the library (media folder) called "name". Matches the whole name
 
      **Rating Filters:**
      - `PARENTALRATING "rating"` / `PARENTAL "rating"` / `RATING "rating"` - Match items with specific parental rating (exact match, e.g., "PG" matches only "PG", not "PG-13")
@@ -248,6 +288,21 @@ Day-based comparisons for temporal criteria:
 #### Play State Collections
 - `MOVIE AND UNPLAYED AND COMMUNITYRATING ">7.5"` - Unwatched high-rated movies
 - `SHOW AND WATCHED AND GENRE "Drama"` - Watched drama series
+
+#### Library Filtering
+- `TAG "Family" AND LIBRARY "Movies"` - Only from the "Movies" library, ignoring identical titles held in others
+- `LIBRARY "4K Movies" AND RESOLUTION "4K"` - Avoids pulling in the 1080p duplicate from another library
+
+#### Quality and Runtime
+- `RESOLUTION "4K" AND HDR "DOVI"` - Dolby Vision 4K content
+- `NOT RESOLUTION "4K"` - Everything a device that cannot handle 4K can play
+- `MOVIE AND RUNTIME "<45"` - Shorts
+- `MOVIE AND RUNTIME "<=100" AND GENRE "Comedy"` - Comedies you can finish in an evening
+- `CHANNELS ">=6" AND AUDIOCODEC "atmos"` - Atmos content with surround audio
+
+#### Crew and Text
+- `WRITER "George Carlin" AND TAG "Stand-Up"` - Specials written by a comedian, without their acting credits
+- `OVERVIEW "heist" OR TAGLINE "one last job"` - Matching words in the description rather than the tags
 
 ## 🔧 Configuration
 

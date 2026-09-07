@@ -29,7 +29,17 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         EpisodeAirDate = 18, // Match by most recent episode air date (for TV shows)
         Unplayed = 19,  // Match unplayed items (not watched by any user)
         Watched = 20,   // Match watched items (played by at least one user)
-        Filename = 21   // Match by filename
+        Filename = 21,  // Match by filename
+        Library = 22,   // Match by library (media folder) name
+        Runtime = 23,   // Match by runtime in minutes
+        Resolution = 24, // Match by video resolution (SD, 720p, 1080p, 4K)
+        VideoRange = 25, // Match by dynamic range (SDR, HDR, HDR10, HLG, DoVi)
+        AudioChannels = 26, // Match by audio channel count (2, 6, 8)
+        AudioCodec = 27, // Match by audio codec or track title (dts, truehd, atmos)
+        Writer = 28,    // Match by writer
+        Producer = 29,  // Match by producer
+        Overview = 30,  // Match by overview / description text
+        Tagline = 31    // Match by tagline
     }
 
     // Token types for expression parsing
@@ -463,6 +473,25 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                     continue;
                 }
 
+                // Library, technical and crew criteria. TryMatchCriteria requires a word
+                // boundary after the keyword, so longer keywords sharing a prefix with
+                // shorter ones (AUDIOCHANNELS / CHANNELS) do not need a particular order.
+                var matchedExtra = false;
+                foreach (var keyword in AdditionalCriteriaKeywords)
+                {
+                    if (TryMatchCriteria(expression, ref position, keyword, out var extraToken))
+                    {
+                        tokens.Add(extraToken);
+                        matchedExtra = true;
+                        break;
+                    }
+                }
+
+                if (matchedExtra)
+                {
+                    continue;
+                }
+
                 // Check for parentheses
                 if (expression[position] == '(')
                 {
@@ -541,6 +570,22 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
 
             return false;
         }
+        // Keywords added after the original criteria set. Kept as a list so the tokenizer
+        // does not need another near-identical if-block per keyword.
+        private static readonly string[] AdditionalCriteriaKeywords =
+        {
+            "LIBRARY",
+            "RUNTIME", "DURATION", "LENGTH",
+            "RESOLUTION", "QUALITY",
+            "HDR", "VIDEORANGE", "DYNAMICRANGE",
+            "AUDIOCHANNELS", "CHANNELS",
+            "AUDIOCODEC", "ACODEC",
+            "WRITER",
+            "PRODUCER",
+            "OVERVIEW", "DESCRIPTION", "PLOT",
+            "TAGLINE"
+        };
+
         private bool TryMatchCriteria(string expression, ref int position, string criteria, out Token token)
         {
             token = null;
@@ -636,6 +681,45 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                             break;
                         case "WATCHED":
                             token.CriteriaType = Configuration.CriteriaType.Watched;
+                            break;
+                        case "LIBRARY":
+                            token.CriteriaType = Configuration.CriteriaType.Library;
+                            break;
+                        case "RUNTIME":
+                        case "DURATION":
+                        case "LENGTH":
+                            token.CriteriaType = Configuration.CriteriaType.Runtime;
+                            break;
+                        case "RESOLUTION":
+                        case "QUALITY":
+                            token.CriteriaType = Configuration.CriteriaType.Resolution;
+                            break;
+                        case "HDR":
+                        case "VIDEORANGE":
+                        case "DYNAMICRANGE":
+                            token.CriteriaType = Configuration.CriteriaType.VideoRange;
+                            break;
+                        case "AUDIOCHANNELS":
+                        case "CHANNELS":
+                            token.CriteriaType = Configuration.CriteriaType.AudioChannels;
+                            break;
+                        case "AUDIOCODEC":
+                        case "ACODEC":
+                            token.CriteriaType = Configuration.CriteriaType.AudioCodec;
+                            break;
+                        case "WRITER":
+                            token.CriteriaType = Configuration.CriteriaType.Writer;
+                            break;
+                        case "PRODUCER":
+                            token.CriteriaType = Configuration.CriteriaType.Producer;
+                            break;
+                        case "OVERVIEW":
+                        case "DESCRIPTION":
+                        case "PLOT":
+                            token.CriteriaType = Configuration.CriteriaType.Overview;
+                            break;
+                        case "TAGLINE":
+                            token.CriteriaType = Configuration.CriteriaType.Tagline;
                             break;
                     }
 
