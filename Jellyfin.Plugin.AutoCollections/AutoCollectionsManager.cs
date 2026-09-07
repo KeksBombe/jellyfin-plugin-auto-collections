@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -16,6 +17,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Data.Enums;
+using Jellyfin.Extensions;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
 using Jellyfin.Plugin.AutoCollections.Configuration;
@@ -1776,21 +1778,22 @@ namespace Jellyfin.Plugin.AutoCollections
         /// </remarks>
         private List<Person> FindPersonsByName(string nameToMatch, bool caseSensitive, bool exactMatch = false)
         {
-            StringComparison comparison = caseSensitive
-                ? StringComparison.Ordinal
-                : StringComparison.OrdinalIgnoreCase;
+            var compareInfo = CultureInfo.InvariantCulture.CompareInfo;
+            var comparison = caseSensitive
+                ? CompareOptions.IgnoreNonSpace
+                : CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace;
 
             return _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Person },
                 Recursive = true,
-                NameContains = nameToMatch
+                // Jellyfin 10.11 compares NameContains directly against CleanName.
+                NameContains = nameToMatch.RemoveDiacritics().ToLowerInvariant()
             }).OfType<Person>()
-                // NameContains is case-insensitive in the query, so a case-sensitive
-                // search still has to be narrowed down here.
+                // Preserve exact/case-sensitive matching without rejecting diacritic variants.
                 .Where(p => p.Name != null && (exactMatch
-                    ? p.Name.Equals(nameToMatch, comparison)
-                    : p.Name.Contains(nameToMatch, comparison)))
+                    ? compareInfo.Compare(p.Name, nameToMatch, comparison) == 0
+                    : compareInfo.IndexOf(p.Name, nameToMatch, comparison) >= 0))
                 .ToList();
         }
 
