@@ -33,7 +33,7 @@ The Auto Collections plugin enables you to create smart collections that automat
 - **Studio**: Collect content from specific studios
 - **Actor**: Find all content featuring specific actors
 - **Director**: Group content by director
-- **Tag**: Match items with specific tags
+- **Tag**: Match items with specific tags - uses exact matching
 - **Production Location**: Filter by country/region of origin
 
 #### Media Type Filtering
@@ -78,7 +78,7 @@ Here are the REAL keywords you can use in expressions:
 - `STUDIO` - Match by studio
 - `ACTOR` - Match by actor
 - `DIRECTOR` - Match by director
-- `TAG` - Match by tag
+- `TAG` - Match by tag (exact match)
 
 **Media Type Criteria:**
 - `MOVIE` - Match only movies
@@ -178,7 +178,7 @@ Day-based comparisons for temporal criteria:
 ### Simple Collections Setup
 
 1. Navigate to `Dashboard -> Plugins -> My Plugins -> Auto Collections`
-2. Choose match type: Title, Genre, Studio, Actor, or Director
+2. Choose match type: Title, Genre, Studio, Actor, Director, or Tag
 3. Set media type filter: All, Movies only, or Shows only
 4. Enter search string
 5. Configure case sensitivity
@@ -198,7 +198,7 @@ Day-based comparisons for temporal criteria:
      - `STUDIO "name"` - Match items from "name" studio
      - `ACTOR "name"` - Match items with "name" actor
      - `DIRECTOR "name"` - Match items with "name" director
-     - `TAG "tag"` - Match items with "tag" in their tags
+     - `TAG "tag"` - Match items carrying exactly that tag (e.g., `TAG "Best Film"` does not match "Best Film Editing")
      - `PRODUCTIONLOCATION "location"` / `LOCATION "location"` / `COUNTRY "location"` - Match items by production country/location
 
      **Rating Filters:**

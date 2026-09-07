@@ -36,12 +36,18 @@ namespace Jellyfin.Plugin.AutoCollections
     // and initialization logic for the AutoCollectionsManager.
     public class AutoCollectionsManager : IDisposable
     {
+        // Marks every collection this plugin owns so later runs recognise them again.
+        private const string AutoCollectionTag = "Autocollection";
+
         private readonly ICollectionManager _collectionManager;
         private readonly ILibraryManager _libraryManager;
         private readonly IProviderManager _providerManager;
         private readonly IUserDataManager? _userDataManager;
         private readonly IUserManager? _userManager;
         private readonly Timer _timer;
+        // Static so the dashboard button, the API and the scheduled task all share one gate,
+        // even though each of them builds its own manager instance.
+        private static readonly SemaphoreSlim _runGate = new SemaphoreSlim(1, 1);
         private readonly ILogger<AutoCollectionsManager> _logger;
         private readonly string _pluginDirectory;
         
@@ -100,7 +106,6 @@ namespace Jellyfin.Plugin.AutoCollections
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = true,
                     Tags = [term]
                 }).OfType<Series>();
 
@@ -109,7 +114,6 @@ namespace Jellyfin.Plugin.AutoCollections
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = true,
                     Genres = [term]
                 }).OfType<Series>();
                 
@@ -125,7 +129,6 @@ namespace Jellyfin.Plugin.AutoCollections
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Actor" }
                 }).OfType<Series>();
@@ -135,7 +138,6 @@ namespace Jellyfin.Plugin.AutoCollections
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTvdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Director" }
                 }).OfType<Series>();
@@ -177,45 +179,21 @@ namespace Jellyfin.Plugin.AutoCollections
             if (specificPerson == null)
             {
                 // When no specific person is provided, search by tags and genres
-                var byTagsImdb = _libraryManager.GetItemList(new InternalItemsQuery
+                var byTags = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasImdbId = true,
                     Tags = [term]
                 }).OfType<Movie>();
 
-                var byTagsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
+                var byGenres = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTmdbId = true,
-                    Tags = [term]
-                }).OfType<Movie>();
-
-                var byTags = byTagsImdb.Union(byTagsTmdb);
-
-                var byGenresImdb = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Movie },
-                    IsVirtualItem = false,
-                    Recursive = true,
-                    HasImdbId = true,
                     Genres = [term]
                 }).OfType<Movie>();
-
-                var byGenresTmdb = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Movie },
-                    IsVirtualItem = false,
-                    Recursive = true,
-                    HasTmdbId = true,
-                    Genres = [term]
-                }).OfType<Movie>();
-                
-                var byGenres = byGenresImdb.Union(byGenresTmdb);
                 
                 results = byTags.Union(byGenres);
             }
@@ -224,49 +202,23 @@ namespace Jellyfin.Plugin.AutoCollections
                 // When a specific person is provided, search by actor and director
                 var personName = specificPerson.Name;
                 
-                var byActorsImdb = _libraryManager.GetItemList(new InternalItemsQuery
+                var byActors = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasImdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Actor" }
                 }).OfType<Movie>();
 
-                var byActorsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
+                var byDirectors = _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Movie },
                     IsVirtualItem = false,
                     Recursive = true,
-                    HasTmdbId = true,
-                    Person = personName,
-                    PersonTypes = new[] { "Actor" }
-                }).OfType<Movie>();
-
-                var byActors = byActorsImdb.Union(byActorsTmdb);
-
-                var byDirectorsImdb = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Movie },
-                    IsVirtualItem = false,
-                    Recursive = true,
-                    HasImdbId = true,
                     Person = personName,
                     PersonTypes = new[] { "Director" }
                 }).OfType<Movie>();
-
-                var byDirectorsTmdb = _libraryManager.GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Movie },
-                    IsVirtualItem = false,
-                    Recursive = true,
-                    HasTmdbId = true,
-                    Person = personName,
-                    PersonTypes = new[] { "Director" }
-                }).OfType<Movie>();
-                
-                var byDirectors = byDirectorsImdb.Union(byDirectorsTmdb);
                 
                 results = byActors.Union(byDirectors);
             }
@@ -329,6 +281,10 @@ namespace Jellyfin.Plugin.AutoCollections
                 
                 Configuration.MatchType.Director => GetMoviesWithPerson(matchString, "Director", caseSensitive),
                 
+                Configuration.MatchType.Tag => allMovies.Where(movie => 
+                    movie.Tags != null && movie.Tags.Any(tag => 
+                        !string.IsNullOrEmpty(tag) && tag.Equals(matchString, comparison))),
+                
                 _ => allMovies.Where(movie => 
                     !string.IsNullOrEmpty(movie.Name) && movie.Name.Contains(matchString, comparison))
             };
@@ -364,6 +320,10 @@ namespace Jellyfin.Plugin.AutoCollections
                         
                         // Use GetSeriesWithPerson which properly verifies the person's role in each series
                         Configuration.MatchType.Director => GetSeriesWithPerson(matchString, "Director", caseSensitive),
+                        
+                        Configuration.MatchType.Tag => allSeries.Where(series => 
+                            series.Tags != null && series.Tags.Any(tag => 
+                                !string.IsNullOrEmpty(tag) && tag.Equals(matchString, comparison))),
                         
                         _ => allSeries.Where(series => 
                             series.Name != null && series.Name.Contains(matchString, comparison)) // Default to title match
@@ -614,14 +574,152 @@ namespace Jellyfin.Plugin.AutoCollections
         // from the Jellyfin library.
         private BoxSet? GetBoxSetByName(string name)
         {
-            return _libraryManager.GetItemList(new InternalItemsQuery
+            var boxSets = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.BoxSet },
                 CollapseBoxSetItems = false,
-                Recursive = true,
-                Tags = new[] { "Autocollection" },
-                Name = name,
-            }).Select(b => b as BoxSet).FirstOrDefault();
+                Recursive = true
+            }).OfType<BoxSet>().ToList();
+
+            // Preferred: a collection this plugin owns that still carries the configured name.
+            var owned = boxSets.FirstOrDefault(b =>
+                b.Tags != null &&
+                b.Tags.Contains(AutoCollectionTag, StringComparer.OrdinalIgnoreCase) &&
+                string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            if (owned != null)
+            {
+                return owned;
+            }
+
+            // Collections created before the name lock could be renamed behind our back by a
+            // metadata provider, so the display name no longer matches the configuration. The
+            // folder Jellyfin created for them keeps the original name, which makes it the only
+            // reliable way to recognise them again and adopt them instead of creating a duplicate.
+            var byFolder = boxSets.FirstOrDefault(b =>
+                !string.IsNullOrEmpty(b.Path) &&
+                string.Equals(
+                    Path.GetFileName(b.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                    $"{name} [boxset]",
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (byFolder != null)
+            {
+                if (!string.Equals(byFolder.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation(
+                        "Adopting collection '{ActualName}' for configured collection '{ConfiguredName}' (matched by folder)",
+                        byFolder.Name, name);
+                }
+
+                return byFolder;
+            }
+
+            // Deliberately no fall-back on the display name alone: a collection the user built by
+            // hand can share a name with a configured one, and adopting it would start deleting
+            // the items they picked themselves.
+            var unrelated = boxSets.FirstOrDefault(b => string.Equals(b.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (unrelated != null)
+            {
+                _logger.LogWarning(
+                    "A collection named '{CollectionName}' exists but was not created by Auto Collections, so it is left untouched",
+                    name);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Fetches the collection for <paramref name="collectionName"/>, creating it when missing,
+        /// and makes sure the plugin's ownership tag and metadata locks are actually persisted.
+        /// </summary>
+        private async Task<(BoxSet Collection, bool IsNew)> GetOrCreateCollectionAsync(string collectionName)
+        {
+            var collection = GetBoxSetByName(collectionName);
+            var isNew = false;
+
+            if (collection is null)
+            {
+                _logger.LogInformation("{Name} not found, creating.", collectionName);
+                collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
+                {
+                    Name = collectionName,
+                    IsLocked = true
+                });
+                isNew = true;
+            }
+
+            await ApplyCollectionMetadataAsync(collection, collectionName);
+            return (collection, isNew);
+        }
+
+        /// <summary>
+        /// Persists the plugin's ownership tag and pins the fields Jellyfin's metadata providers
+        /// would otherwise take over.
+        /// </summary>
+        /// <remarks>
+        /// Collections used to be created unlocked and the tag was only ever assigned in memory,
+        /// never written back. That let the TMDB box-set provider rename a collection to whichever
+        /// box set it matched (so "HBO" became "The Gathering Storm Collection"), swap its artwork,
+        /// and - because the plugin could no longer find the renamed collection - create a
+        /// replacement on the next run while the old one was cleaned up.
+        /// </remarks>
+        private async Task ApplyCollectionMetadataAsync(BoxSet collection, string collectionName)
+        {
+            var changed = false;
+
+            if (!string.Equals(collection.Name, collectionName, StringComparison.Ordinal))
+            {
+                _logger.LogInformation(
+                    "Restoring collection name '{ActualName}' to the configured name '{ConfiguredName}'",
+                    collection.Name, collectionName);
+                collection.Name = collectionName;
+                changed = true;
+            }
+
+            // Blocks remote metadata refreshes entirely, which is what protects the name and artwork.
+            if (!collection.IsLocked)
+            {
+                collection.IsLocked = true;
+                changed = true;
+            }
+
+            var lockedFields = collection.LockedFields?.ToList() ?? new List<MetadataField>();
+            var missingLocks = new[] { MetadataField.Name, MetadataField.Overview }
+                .Where(field => !lockedFields.Contains(field))
+                .ToList();
+
+            if (missingLocks.Count > 0)
+            {
+                lockedFields.AddRange(missingLocks);
+                collection.LockedFields = lockedFields.ToArray();
+                changed = true;
+            }
+
+            var tags = collection.Tags?.ToList() ?? new List<string>();
+            if (!tags.Contains(AutoCollectionTag, StringComparer.OrdinalIgnoreCase))
+            {
+                tags.Add(AutoCollectionTag);
+                collection.Tags = tags.ToArray();
+                changed = true;
+            }
+
+            if (!string.Equals(collection.DisplayOrder, "Default", StringComparison.Ordinal))
+            {
+                collection.DisplayOrder = "Default";
+                changed = true;
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            await _libraryManager.UpdateItemAsync(
+                collection,
+                collection.GetParent(),
+                ItemUpdateType.MetadataEdit,
+                CancellationToken.None).ConfigureAwait(true);
         }
 
         // ================================================================
@@ -637,7 +735,46 @@ namespace Jellyfin.Plugin.AutoCollections
             await ExecuteAutoCollections(dummyProgress, CancellationToken.None);
         }
 
+        /// <summary>
+        /// Runs every configured collection. Only one run happens at a time across the whole
+        /// server: the dashboard button and the scheduled task both land here, and overlapping
+        /// runs used to fight over the same collections.
+        /// </summary>
         public async Task ExecuteAutoCollections(IProgress<double> progress, CancellationToken cancellationToken)
+        {
+            if (!await _runGate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogInformation("Auto Collections is already running, skipping this request");
+                progress.Report(100);
+                return;
+            }
+
+            try
+            {
+                await ExecuteAutoCollectionsCore(progress, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsServerIncompatibility(ex))
+            {
+                // The server exposes a different API surface than the one this plugin was built
+                // against - almost always a Jellyfin older than 10.11.
+                _logger.LogError(ex,
+                    "Auto Collections could not run against this Jellyfin server. This plugin version requires Jellyfin 10.11 or newer; please update the server or install a plugin release matching it");
+                throw;
+            }
+            finally
+            {
+                _runGate.Release();
+            }
+        }
+
+        /// <summary>
+        /// True for the failures a server built on a different Jellyfin API produces. These are
+        /// fatal for the whole run, so they must not be swallowed by the per-collection handler.
+        /// </summary>
+        private static bool IsServerIncompatibility(Exception ex)
+            => ex is MissingMethodException or MissingFieldException or TypeLoadException;
+
+        private async Task ExecuteAutoCollectionsCore(IProgress<double> progress, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Performing ExecuteAutoCollections");
             
@@ -654,58 +791,79 @@ namespace Jellyfin.Plugin.AutoCollections
             // Report initial progress
             progress.Report(0);
 
-            foreach (var titleMatchPair in titleMatchPairs)
-            {
-                // Check for cancellation
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                try
-                {
-                    _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
-                    await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Auto Collections task was cancelled");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
-                    // Continue with next title-match pair even if one fails
-                }
-                
-                processedCollections++;
-                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
-                progress.Report(progressPercentage);
-                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
-            }
+            // Person lookups are shared across every collection in this run. Rebuilding them per
+            // collection is the main reason large libraries took hours to process.
+            InitializePersonCache();
 
-            foreach (var expressionCollection in expressionCollections)
+            try
             {
-                // Check for cancellation
-                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var titleMatchPair in titleMatchPairs)
+                {
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
                 
-                try
-                {
-                    _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
-                    await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.LogInformation("Auto Collections task was cancelled");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
-                    // Continue with next expression collection even if one fails
-                }
+                    try
+                    {
+                        _logger.LogInformation($"Processing Auto collection for title match: {titleMatchPair.TitleMatch} ({processedCollections + 1} of {totalCollections})");
+                        await ExecuteAutoCollectionsForTitleMatchPair(titleMatchPair);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Auto Collections task was cancelled");
+                        throw;
+                    }
+                    catch (Exception ex) when (IsServerIncompatibility(ex))
+                    {
+                        // Every collection would hit this, so stop instead of logging it once per collection
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error processing Auto collection for title match: {titleMatchPair.TitleMatch}");
+                        // Continue with next title-match pair even if one fails
+                    }
                 
-                processedCollections++;
-                double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
-                progress.Report(progressPercentage);
-                _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                    processedCollections++;
+                    double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                    progress.Report(progressPercentage);
+                    _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                }
+
+                foreach (var expressionCollection in expressionCollections)
+                {
+                    // Check for cancellation
+                    cancellationToken.ThrowIfCancellationRequested();
+                
+                    try
+                    {
+                        _logger.LogInformation($"Processing Advanced collection: {expressionCollection.CollectionName} ({processedCollections + 1} of {totalCollections})");
+                        await ExecuteAutoCollectionsForExpressionCollection(expressionCollection);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.LogInformation("Auto Collections task was cancelled");
+                        throw;
+                    }
+                    catch (Exception ex) when (IsServerIncompatibility(ex))
+                    {
+                        // Every collection would hit this, so stop instead of logging it once per collection
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Error processing Advanced collection: {expressionCollection.CollectionName}");
+                        // Continue with next expression collection even if one fails
+                    }
+                
+                    processedCollections++;
+                    double progressPercentage = totalCollections > 0 ? (double)processedCollections / totalCollections * 100 : 100;
+                    progress.Report(progressPercentage);
+                    _logger.LogDebug($"Progress: {processedCollections} of {totalCollections} collections complete ({progressPercentage:F1}%)");
+                }
+            }
+            finally
+            {
+                ClearPersonCache();
             }
 
             progress.Report(100);
@@ -753,6 +911,15 @@ namespace Jellyfin.Plugin.AutoCollections
         {
             try
             {
+                // Artwork the user (or an earlier run) already set is never replaced - re-picking
+                // it on every sync is what made collection posters change on their own.
+                if (collection.ImageInfos != null && collection.ImageInfos.Any(i => i.Type == ImageType.Primary))
+                {
+                    _logger.LogDebug("Collection {CollectionName} already has a primary image, keeping it",
+                        collection.Name);
+                    return;
+                }
+
                 // First attempt: Use the specific person if provided
                 if (specificPerson != null && specificPerson.ImageInfos != null)
                 {
@@ -842,12 +1009,16 @@ namespace Jellyfin.Plugin.AutoCollections
                     }
                 }
 
-                // Last fallback: Use an image from a movie/series in the collection
+                // Last fallback: use an image from a movie/series in the collection. Ordered by id
+                // so the same collection always resolves to the same poster instead of whichever
+                // item the library happened to return first.
                 var mediaItemWithImage = items
                     .Where(item => item is Movie || item is Series)
-                    .FirstOrDefault(item =>
+                    .Where(item =>
                         item.ImageInfos != null &&
-                        item.ImageInfos.Any(i => i.Type == ImageType.Primary));
+                        item.ImageInfos.Any(i => i.Type == ImageType.Primary))
+                    .OrderBy(item => item.Id)
+                    .FirstOrDefault();
 
                 if (mediaItemWithImage != null)
                 {
@@ -896,20 +1067,7 @@ namespace Jellyfin.Plugin.AutoCollections
             var collectionName = GetCollectionName(tagTitlePair);
             
             // Get or create the collection
-            var collection = GetBoxSetByName(collectionName);
-            bool isNewCollection = false;
-            if (collection is null)
-            {
-                _logger.LogInformation("{Name} not found, creating.", collectionName);
-                collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
-                {
-                    Name = collectionName,
-                    IsLocked = false
-                });
-                collection.Tags = new[] { "Autocollection" };
-                isNewCollection = true;
-            }
-            collection.DisplayOrder = "Default";
+            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName);
 
             // Get all tags from the tag-title pair
             string[] tags = tagTitlePair.GetTagsArray();
@@ -1061,6 +1219,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 Configuration.MatchType.Studio => "studio",
                 Configuration.MatchType.Actor => "actor",
                 Configuration.MatchType.Director => "director",
+                Configuration.MatchType.Tag => "tag",
                 _ => "title"
             };
             
@@ -1078,20 +1237,7 @@ namespace Jellyfin.Plugin.AutoCollections
             var collectionName = titleMatchPair.CollectionName;
             
             // Get or create the collection
-            var collection = GetBoxSetByName(collectionName);
-            bool isNewCollection = false;
-            if (collection == null)
-            {
-                _logger.LogInformation("{Name} not found, creating.", collectionName);
-                collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
-                {
-                    Name = collectionName,
-                    IsLocked = false
-                });
-                collection.Tags = new[] { "Autocollection" };
-                isNewCollection = true;
-            }
-            collection.DisplayOrder = "Default";
+            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName);
               
             _logger.LogDebug("Title Match Collection '{CollectionName}' - Pattern: '{Pattern}', Match Type: {MatchType}, Case Sensitive: {CaseSensitive}", 
                 collectionName, titleMatchPair.TitleMatch, titleMatchPair.MatchType, titleMatchPair.CaseSensitive);
@@ -1321,25 +1467,40 @@ namespace Jellyfin.Plugin.AutoCollections
             return matchingSeries.Any(s => s.Id == seriesId);
         }
 
+        /// <summary>
+        /// Finds every person in the library whose name contains <paramref name="nameToMatch"/>.
+        /// </summary>
+        /// <remarks>
+        /// The name filter is pushed into the library query. Pulling every person in the library
+        /// back and filtering in memory is what made large libraries with many actor/director
+        /// collections take hours: that full scan ran once per person term, per collection.
+        /// </remarks>
+        private List<Person> FindPersonsByName(string nameToMatch, bool caseSensitive)
+        {
+            StringComparison comparison = caseSensitive
+                ? StringComparison.Ordinal
+                : StringComparison.OrdinalIgnoreCase;
+
+            return _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Person },
+                Recursive = true,
+                NameContains = nameToMatch
+            }).OfType<Person>()
+                // NameContains is case-insensitive in the query, so a case-sensitive
+                // search still has to be narrowed down here.
+                .Where(p => p.Name != null && p.Name.Contains(nameToMatch, comparison))
+                .ToList();
+        }
+
         // Helper method to find movies with a specific person type (actor or director) 
         // that match the given string (partial or exact matching)
         // This method uses Jellyfin's PersonTypes query parameter to ensure only
         // movies where the person has the specified role are returned
         private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
-            StringComparison comparison = caseSensitive 
-                ? StringComparison.Ordinal 
-                : StringComparison.OrdinalIgnoreCase;
+            var persons = FindPersonsByName(personNameToMatch, caseSensitive);
 
-            // First get all persons matching the name
-            var persons = _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Person },
-                Recursive = true
-            }).Select(p => p as Person)
-                .Where(p => p?.Name != null && p.Name.Contains(personNameToMatch, comparison))
-                .ToList();
-            
             _logger.LogDebug("Found {Count} person(s) matching '{NameToMatch}' for {PersonType} search", 
                 persons.Count, personNameToMatch, personType);
             
@@ -1384,19 +1545,8 @@ namespace Jellyfin.Plugin.AutoCollections
         // series where the person has the specified role are returned
         private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
         {
-            StringComparison comparison = caseSensitive 
-                ? StringComparison.Ordinal 
-                : StringComparison.OrdinalIgnoreCase;
-                
-            // First get all persons matching the name
-            var persons = _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Person },
-                Recursive = true
-            }).Select(p => p as Person)
-                .Where(p => p?.Name != null && p.Name.Contains(personNameToMatch, comparison))
-                .ToList();
-            
+            var persons = FindPersonsByName(personNameToMatch, caseSensitive);
+
             _logger.LogDebug("Found {Count} person(s) matching '{NameToMatch}' for {PersonType} search", 
                 persons.Count, personNameToMatch, personType);
             
@@ -1479,8 +1629,9 @@ namespace Jellyfin.Plugin.AutoCollections
                     return false;
                     
                 case Configuration.CriteriaType.Tag:
+                    // Whole-tag match: TAG "Best Film" must not also pull in "Best Film Editing".
                     return movie.Tags != null && 
-                           movie.Tags.Any(t => t.Contains(value, comparison));
+                           movie.Tags.Any(t => t.Equals(value, comparison));
                            
                 // Content rating and parental guidance criteria
                 case Configuration.CriteriaType.ParentalRating:
@@ -1543,11 +1694,11 @@ namespace Jellyfin.Plugin.AutoCollections
                     
                 case Configuration.CriteriaType.Unplayed:
                     // Check if the movie is unplayed (not watched by any user)
-                    return IsItemUnplayed(movie);
+                    return IsItemUnplayed(movie) == true;
                     
                 case Configuration.CriteriaType.Watched:
                     // Check if the movie is watched (played by at least one user)
-                    return !IsItemUnplayed(movie);
+                    return IsItemUnplayed(movie) == false;
                     
                 default:
                     return false;
@@ -1590,8 +1741,9 @@ namespace Jellyfin.Plugin.AutoCollections
                     return true;
                 
                 case Configuration.CriteriaType.Tag:
-                    return series.Tags != null && 
-                           series.Tags.Any(t => t.Contains(value, comparison));
+                    // Whole-tag match: TAG "Best Film" must not also pull in "Best Film Editing".
+                    return series.Tags != null &&
+                           series.Tags.Any(t => t.Equals(value, comparison));
                            
                 case Configuration.CriteriaType.ParentalRating:
                     return !string.IsNullOrEmpty(series.OfficialRating) && 
@@ -1697,11 +1849,11 @@ namespace Jellyfin.Plugin.AutoCollections
                     
                 case Configuration.CriteriaType.Unplayed:
                     // Check if the series is unplayed (not watched by any user)
-                    return IsItemUnplayed(series);
+                    return IsItemUnplayed(series) == true;
                     
                 case Configuration.CriteriaType.Watched:
                     // Check if the series is watched (played by at least one user)
-                    return !IsItemUnplayed(series);
+                    return IsItemUnplayed(series) == false;
                     
                 default:
                     return false;
@@ -1729,21 +1881,7 @@ namespace Jellyfin.Plugin.AutoCollections
             
             // Get or create the collection
             var collectionName = expressionCollection.CollectionName;
-            var collection = GetBoxSetByName(collectionName);
-            bool isNewCollection = false;
-            
-            if (collection is null)
-            {
-                _logger.LogInformation("{Name} not found, creating.", collectionName);
-                collection = await _collectionManager.CreateCollectionAsync(new CollectionCreationOptions
-                {
-                    Name = collectionName,
-                    IsLocked = false
-                });
-                collection.Tags = new[] { "Autocollection" };
-                isNewCollection = true;
-            }
-            collection.DisplayOrder = "Default";
+            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName);
             
             // Get all movies and series from the library
             var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
@@ -1772,9 +1910,14 @@ namespace Jellyfin.Plugin.AutoCollections
             
             if (expressionCollection.ParsedExpression != null)
             {
-                // Initialize person-to-media cache for efficient evaluation
-                InitializePersonCache();
-                
+                // Normally the cache is opened once for the whole run; only take ownership
+                // of it here when this collection is being processed on its own.
+                var ownsPersonCache = _personToMoviesCache == null;
+                if (ownsPersonCache)
+                {
+                    InitializePersonCache();
+                }
+
                 try
                 {
                     _logger.LogDebug("Evaluating movies against expression...");
@@ -1821,8 +1964,10 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
                 finally
                 {
-                    // Always clear the cache after evaluation
-                    ClearPersonCache();
+                    if (ownsPersonCache)
+                    {
+                        ClearPersonCache();
+                    }
                 }
             }
             
@@ -2055,21 +2200,25 @@ namespace Jellyfin.Plugin.AutoCollections
             return false;
         }
         
-        // Helper method to check if an item is unplayed (not watched by any user)
-        private bool IsItemUnplayed(BaseItem item)
+        // Helper method to check if an item is unplayed (not watched by any user).
+        // Returns null when the play state cannot be determined - callers must then treat
+        // both UNPLAYED and WATCHED as "no match" rather than guessing, otherwise an
+        // unreadable play state silently sweeps the whole library into the collection.
+        private bool? IsItemUnplayed(BaseItem item)
         {
             try
             {
-                // If user data manager or user manager is not available, log warning and assume item is unplayed
+                // If user data manager or user manager is not available, the play state is unknown
                 if (_userDataManager == null || _userManager == null)
                 {
-                    _logger.LogWarning("UserDataManager or UserManager not available for item {ItemName}, assuming item is unplayed", item.Name);
-                    return true;
+                    _logger.LogWarning("UserDataManager or UserManager not available for item {ItemName}, play state is unknown", item.Name);
+                    return null;
                 }
 
-                // Get all users and check if ANY of them have played this item
-                var users = _userManager.Users.ToList();
-                
+                // Get all users and check if ANY of them have played this item.
+                // Resolved through JellyfinCompat because 10.11.9 replaced IUserManager.Users with GetUsers().
+                var users = JellyfinCompat.GetUsers(_userManager);
+
                 if (users.Count == 0)
                 {
                     _logger.LogDebug("No users found, assuming item {ItemName} is unplayed", item.Name);
@@ -2095,8 +2244,8 @@ namespace Jellyfin.Plugin.AutoCollections
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error checking play state for item {ItemName}", item.Name);
-                // If we can't determine the play state, assume it's unplayed (safer default)
-                return true;
+                // Unknown play state - let the caller drop the item instead of assuming
+                return null;
             }
         }
 

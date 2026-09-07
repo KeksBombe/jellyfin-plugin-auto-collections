@@ -54,18 +54,36 @@ namespace Jellyfin.Plugin.AutoCollections.Api
                 applicationPaths);
             _logger = logger;
         }        /// <summary>
-        /// Creates Auto collections.
+        /// Starts a run of the Auto Collections sync.
         /// </summary>
-        /// <reponse code="204">Auto Collection started successfully. </response>
-        /// <returns>A <see cref="NoContentResult"/> indicating success.</returns>
+        /// <remarks>
+        /// The run is started in the background and the request returns straight away. A full sync
+        /// can take minutes on a large library, and waiting for it meant the dashboard showed no
+        /// confirmation until it finished (or the request timed out), so people clicked the button
+        /// repeatedly. The manager itself makes sure only one run happens at a time.
+        /// </remarks>
+        /// <response code="202">Auto Collections sync started.</response>
+        /// <returns>An <see cref="AcceptedResult"/> indicating the run was started.</returns>
         [HttpPost("AutoCollections")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<ActionResult> AutoCollectionsRequest()
+        [ProducesResponseType(StatusCodes.Status202Accepted)]
+        public ActionResult AutoCollectionsRequest()
         {
             _logger.LogInformation("Generating Auto Collections");
-            await _syncAutoCollectionsManager.ExecuteAutoCollectionsNoProgress();
-            _logger.LogInformation("Completed");
-            return NoContent();
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _syncAutoCollectionsManager.ExecuteAutoCollectionsNoProgress();
+                    _logger.LogInformation("Completed");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Auto Collections run failed");
+                }
+            });
+
+            return Accepted();
         }
         
         /// <summary>
