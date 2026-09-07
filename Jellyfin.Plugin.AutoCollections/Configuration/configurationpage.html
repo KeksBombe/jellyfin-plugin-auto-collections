@@ -305,7 +305,8 @@
             { value: '1', text: 'Genre' },
             { value: '2', text: 'Studio' },
             { value: '3', text: 'Actor' },
-            { value: '4', text: 'Director' }
+            { value: '4', text: 'Director' },
+            { value: '5', text: 'Tag' }
           ];
           
           options.forEach(opt => {
@@ -713,10 +714,9 @@
             type: "POST"
           };
 
+          Dashboard.alert("Executing Auto Collections...");
+
           ApiClient.fetch(request)
-            .then(function () {
-              Dashboard.alert("Executing Auto Collections...");
-            })
             .catch(function () {
               Dashboard.alert({
                 message: "Unexpected error occurred!"

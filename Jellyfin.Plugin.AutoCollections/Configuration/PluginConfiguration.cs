@@ -64,7 +64,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         Genre = 1,   // Match by genre
         Studio = 2,  // Match by studio
         Actor = 3,   // Match by actor
-        Director = 4 // Match by director
+        Director = 4, // Match by director
+        Tag = 5      // Match by tag
     }
     
     // Media types for filtering collections
@@ -113,6 +114,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                 MatchType.Studio => $"{matchString} Studio Productions",
                 MatchType.Actor => $"{matchString} Acting",
                 MatchType.Director => $"{matchString} Directed",
+                MatchType.Tag => $"{matchString} Tagged",
                 _ => $"{matchString} Movies" // Default for Title and any future types
             };
         }
