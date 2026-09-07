@@ -59,6 +59,9 @@ namespace Jellyfin.Plugin.AutoCollections
         // Cache for item's people to avoid repeated DB calls
         // Key: item ID, Value: list of (personName, personType) tuples
         private Dictionary<Guid, List<(string Name, string Type)>>? _itemPeopleCache;
+        // Cache for the libraries an item belongs to
+        // Key: item ID, Value: names of the libraries containing it
+        private Dictionary<Guid, List<string>>? _itemLibrariesCache;
 
         // Constructor with IUserDataManager and IUserManager for full functionality
         public AutoCollectionsManager(IProviderManager providerManager, ICollectionManager collectionManager, ILibraryManager libraryManager, IUserDataManager userDataManager, IUserManager userManager, ILogger<AutoCollectionsManager> logger, IApplicationPaths applicationPaths)
@@ -285,6 +288,8 @@ namespace Jellyfin.Plugin.AutoCollections
                     movie.Tags != null && movie.Tags.Any(tag => 
                         !string.IsNullOrEmpty(tag) && tag.Equals(matchString, comparison))),
                 
+                Configuration.MatchType.Writer => GetMoviesWithPerson(matchString, "Writer", caseSensitive),
+                
                 _ => allMovies.Where(movie => 
                     !string.IsNullOrEmpty(movie.Name) && movie.Name.Contains(matchString, comparison))
             };
@@ -324,6 +329,8 @@ namespace Jellyfin.Plugin.AutoCollections
                         Configuration.MatchType.Tag => allSeries.Where(series => 
                             series.Tags != null && series.Tags.Any(tag => 
                                 !string.IsNullOrEmpty(tag) && tag.Equals(matchString, comparison))),
+                        
+                        Configuration.MatchType.Writer => GetSeriesWithPerson(matchString, "Writer", caseSensitive),
                         
                         _ => allSeries.Where(series => 
                             series.Name != null && series.Name.Contains(matchString, comparison)) // Default to title match
@@ -866,8 +873,74 @@ namespace Jellyfin.Plugin.AutoCollections
                 ClearPersonCache();
             }
 
+            if (Plugin.Instance!.Configuration.DeleteOrphanedCollections)
+            {
+                RemoveOrphanedCollections(
+                    titleMatchPairs.Select(p => p.CollectionName)
+                        .Concat(expressionCollections.Select(e => e.CollectionName)));
+            }
+
             progress.Report(100);
             _logger.LogInformation($"Completed execution of all {totalCollections} Auto collections");
+        }
+
+        /// <summary>
+        /// Deletes collections this plugin created that are no longer in the configuration.
+        /// </summary>
+        /// <remarks>
+        /// Only collections carrying the plugin's ownership tag are considered, so collections
+        /// made by hand or by another plugin are never touched. Skipped when the configuration
+        /// holds no collections at all, so a configuration that failed to load cannot wipe
+        /// every collection the plugin has ever made.
+        /// </remarks>
+        private void RemoveOrphanedCollections(IEnumerable<string> configuredNames)
+        {
+            var wanted = new HashSet<string>(
+                configuredNames.Where(name => !string.IsNullOrWhiteSpace(name)),
+                StringComparer.OrdinalIgnoreCase);
+
+            if (wanted.Count == 0)
+            {
+                _logger.LogInformation("No collections are configured, skipping orphan cleanup");
+                return;
+            }
+
+            var orphans = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                CollapseBoxSetItems = false,
+                Recursive = true
+            }).OfType<BoxSet>()
+                .Where(boxSet =>
+                    boxSet.Tags != null &&
+                    boxSet.Tags.Contains(AutoCollectionTag, StringComparer.OrdinalIgnoreCase) &&
+                    !wanted.Contains(boxSet.Name))
+                .ToList();
+
+            if (orphans.Count == 0)
+            {
+                _logger.LogDebug("No orphaned collections to remove");
+                return;
+            }
+
+            foreach (var orphan in orphans)
+            {
+                try
+                {
+                    _logger.LogInformation(
+                        "Deleting orphaned collection '{CollectionName}' - no longer in the configuration",
+                        orphan.Name);
+
+                    _libraryManager.DeleteItem(
+                        orphan,
+                        new DeleteOptions { DeleteFileLocation = true },
+                        true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Could not delete orphaned collection '{CollectionName}'", orphan.Name);
+                }
+            }
         }
 
         // ================================================================
@@ -1220,6 +1293,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 Configuration.MatchType.Actor => "actor",
                 Configuration.MatchType.Director => "director",
                 Configuration.MatchType.Tag => "tag",
+                Configuration.MatchType.Writer => "writer",
                 _ => "title"
             };
             
@@ -1380,6 +1454,7 @@ namespace Jellyfin.Plugin.AutoCollections
             _personToMoviesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
             _personToSeriesCache = new Dictionary<(string, string, bool), HashSet<Guid>>();
             _itemPeopleCache = new Dictionary<Guid, List<(string Name, string Type)>>();
+            _itemLibrariesCache = new Dictionary<Guid, List<string>>();
         }
         
         // Clear person-to-media cache after expression evaluation is complete
@@ -1388,6 +1463,7 @@ namespace Jellyfin.Plugin.AutoCollections
             _personToMoviesCache = null;
             _personToSeriesCache = null;
             _itemPeopleCache = null;
+            _itemLibrariesCache = null;
         }
         
         // Get cached people for an item (movie or series)
@@ -1700,6 +1776,36 @@ namespace Jellyfin.Plugin.AutoCollections
                     // Check if the movie is watched (played by at least one user)
                     return IsItemUnplayed(movie) == false;
                     
+                case Configuration.CriteriaType.Library:
+                    return MatchesLibrary(movie, value, comparison);
+
+                case Configuration.CriteriaType.Runtime:
+                    return MatchesRuntime(movie, value);
+
+                case Configuration.CriteriaType.Resolution:
+                    return MatchesResolution(movie, value);
+
+                case Configuration.CriteriaType.VideoRange:
+                    return MatchesVideoRange(movie, value);
+
+                case Configuration.CriteriaType.AudioChannels:
+                    return MatchesAudioChannels(movie, value);
+
+                case Configuration.CriteriaType.AudioCodec:
+                    return MatchesAudioCodec(movie, value, comparison);
+
+                case Configuration.CriteriaType.Writer:
+                    return MovieHasPerson(movie.Id, value, "Writer", caseSensitive);
+
+                case Configuration.CriteriaType.Producer:
+                    return MovieHasPerson(movie.Id, value, "Producer", caseSensitive);
+
+                case Configuration.CriteriaType.Overview:
+                    return !string.IsNullOrEmpty(movie.Overview) && movie.Overview.Contains(value, comparison);
+
+                case Configuration.CriteriaType.Tagline:
+                    return !string.IsNullOrEmpty(movie.Tagline) && movie.Tagline.Contains(value, comparison);
+
                 default:
                     return false;
             }
@@ -1855,6 +1961,36 @@ namespace Jellyfin.Plugin.AutoCollections
                     // Check if the series is watched (played by at least one user)
                     return IsItemUnplayed(series) == false;
                     
+                case Configuration.CriteriaType.Library:
+                    return MatchesLibrary(series, value, comparison);
+
+                case Configuration.CriteriaType.Runtime:
+                    return MatchesRuntime(series, value);
+
+                case Configuration.CriteriaType.Resolution:
+                    return MatchesResolution(series, value);
+
+                case Configuration.CriteriaType.VideoRange:
+                    return MatchesVideoRange(series, value);
+
+                case Configuration.CriteriaType.AudioChannels:
+                    return MatchesAudioChannels(series, value);
+
+                case Configuration.CriteriaType.AudioCodec:
+                    return MatchesAudioCodec(series, value, comparison);
+
+                case Configuration.CriteriaType.Writer:
+                    return SeriesHasPerson(series.Id, value, "Writer", caseSensitive);
+
+                case Configuration.CriteriaType.Producer:
+                    return SeriesHasPerson(series.Id, value, "Producer", caseSensitive);
+
+                case Configuration.CriteriaType.Overview:
+                    return !string.IsNullOrEmpty(series.Overview) && series.Overview.Contains(value, comparison);
+
+                case Configuration.CriteriaType.Tagline:
+                    return !string.IsNullOrEmpty(series.Tagline) && series.Tagline.Contains(value, comparison);
+
                 default:
                     return false;
             }
@@ -2200,6 +2336,198 @@ namespace Jellyfin.Plugin.AutoCollections
             return false;
         }
         
+        // ================================================================
+        // LIBRARY, TECHNICAL AND TEXT CRITERIA
+        // ================================================================
+        // Shared evaluation helpers. These behave identically for movies and
+        // series, so both criteria switches delegate here.
+
+        /// <summary>
+        /// Names of the libraries (media folders) an item belongs to.
+        /// </summary>
+        private List<string> GetLibraryNames(BaseItem item)
+        {
+            if (_itemLibrariesCache != null && _itemLibrariesCache.TryGetValue(item.Id, out var cached))
+            {
+                return cached;
+            }
+
+            List<string> names;
+            try
+            {
+                names = _libraryManager.GetCollectionFolders(item)
+                    .Select(folder => folder.Name)
+                    .Where(name => !string.IsNullOrEmpty(name))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not determine the library for item {ItemName}", item.Name);
+                names = new List<string>();
+            }
+
+            if (_itemLibrariesCache != null)
+            {
+                _itemLibrariesCache[item.Id] = names;
+            }
+
+            return names;
+        }
+
+        private bool MatchesLibrary(BaseItem item, string value, StringComparison comparison)
+        {
+            return GetLibraryNames(item).Any(name => name.Equals(value, comparison));
+        }
+
+        /// <summary>
+        /// Compares the item's runtime, in whole minutes, against a value such as "&lt;45" or "&gt;=100".
+        /// </summary>
+        private bool MatchesRuntime(BaseItem item, string value)
+        {
+            if (!item.RunTimeTicks.HasValue || item.RunTimeTicks.Value <= 0)
+            {
+                return false;
+            }
+
+            var minutes = (float)item.RunTimeTicks.Value / TimeSpan.TicksPerMinute;
+            return CompareNumericValue(minutes, value);
+        }
+
+        private MediaBrowser.Model.Entities.MediaStream? GetPrimaryVideoStream(BaseItem item)
+        {
+            return item.GetMediaStreams()
+                .Where(stream => stream.Type == MediaBrowser.Model.Entities.MediaStreamType.Video)
+                .OrderByDescending(stream => stream.Width ?? 0)
+                .FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Matches a resolution label (4K, 1080p, 720p, SD) against the item's video stream.
+        /// </summary>
+        /// <remarks>
+        /// Buckets are based on width with a height fallback, because anamorphic and
+        /// non-16:9 sources do not line up with the nominal "1080p"-style heights.
+        /// </remarks>
+        private bool MatchesResolution(BaseItem item, string value)
+        {
+            var video = GetPrimaryVideoStream(item);
+            if (video == null)
+            {
+                return false;
+            }
+
+            var width = video.Width ?? 0;
+            var height = video.Height ?? 0;
+            if (width == 0 && height == 0)
+            {
+                return false;
+            }
+
+            string bucket;
+            if (width >= 3800 || height >= 2000)
+            {
+                bucket = "4K";
+            }
+            else if (width >= 2500 || height >= 1400)
+            {
+                bucket = "1440P";
+            }
+            else if (width >= 1800 || height >= 1000)
+            {
+                bucket = "1080P";
+            }
+            else if (width >= 1200 || height >= 700)
+            {
+                bucket = "720P";
+            }
+            else
+            {
+                bucket = "SD";
+            }
+
+            var wanted = value.Trim().ToUpperInvariant() switch
+            {
+                "4K" or "2160P" or "UHD" => "4K",
+                "1440P" or "2K" or "QHD" => "1440P",
+                "1080P" or "FHD" or "FULLHD" => "1080P",
+                "720P" or "HD" => "720P",
+                "SD" or "480P" or "576P" or "DVD" => "SD",
+                _ => value.Trim().ToUpperInvariant()
+            };
+
+            return bucket == wanted;
+        }
+
+        /// <summary>
+        /// Matches a dynamic range label (SDR, HDR, HDR10, HLG, DoVi) against the item's video stream.
+        /// </summary>
+        private bool MatchesVideoRange(BaseItem item, string value)
+        {
+            var video = GetPrimaryVideoStream(item);
+            if (video == null)
+            {
+                return false;
+            }
+
+            var rangeType = video.VideoRangeType.ToString().ToUpperInvariant();
+            var wanted = value.Trim().ToUpperInvariant();
+
+            return wanted switch
+            {
+                // "HDR" is the umbrella term users reach for, so it covers every
+                // high-dynamic-range flavour rather than only the HDR10 profile.
+                "HDR" => rangeType != "SDR" && rangeType != "UNKNOWN",
+                "SDR" => rangeType == "SDR",
+                "DOVI" or "DV" or "DOLBYVISION" => rangeType.StartsWith("DOVI", StringComparison.Ordinal),
+                _ => rangeType == wanted
+            };
+        }
+
+        /// <summary>
+        /// Compares the highest audio channel count against a value such as "&gt;=6", "5.1" or "stereo".
+        /// </summary>
+        private bool MatchesAudioChannels(BaseItem item, string value)
+        {
+            var channels = item.GetMediaStreams()
+                .Where(stream => stream.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio)
+                .Select(stream => stream.Channels ?? 0)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            if (channels == 0)
+            {
+                return false;
+            }
+
+            var wanted = value.Trim().ToUpperInvariant() switch
+            {
+                "MONO" => "1",
+                "STEREO" or "2.0" => "2",
+                "5.1" => "6",
+                "7.1" => "8",
+                _ => value.Trim()
+            };
+
+            return CompareNumericValue(channels, wanted);
+        }
+
+        /// <summary>
+        /// Matches an audio codec or track description, so both "dts" and "atmos" work.
+        /// </summary>
+        /// <remarks>
+        /// Atmos and similar are not codecs of their own; they only show up in the
+        /// stream's profile or display title, so both are searched.
+        /// </remarks>
+        private bool MatchesAudioCodec(BaseItem item, string value, StringComparison comparison)
+        {
+            return item.GetMediaStreams()
+                .Where(stream => stream.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio)
+                .Any(stream =>
+                    (!string.IsNullOrEmpty(stream.Codec) && stream.Codec.Contains(value, comparison)) ||
+                    (!string.IsNullOrEmpty(stream.Profile) && stream.Profile.Contains(value, comparison)) ||
+                    (!string.IsNullOrEmpty(stream.DisplayTitle) && stream.DisplayTitle.Contains(value, comparison)));
+        }
+
         // Helper method to check if an item is unplayed (not watched by any user).
         // Returns null when the play state cannot be determined - callers must then treat
         // both UNPLAYED and WATCHED as "no match" rather than guessing, otherwise an

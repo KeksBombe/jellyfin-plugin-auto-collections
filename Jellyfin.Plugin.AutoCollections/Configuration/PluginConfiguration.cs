@@ -65,7 +65,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         Studio = 2,  // Match by studio
         Actor = 3,   // Match by actor
         Director = 4, // Match by director
-        Tag = 5      // Match by tag
+        Tag = 5,     // Match by tag
+        Writer = 6   // Match by writer
     }
     
     // Media types for filtering collections
@@ -115,6 +116,7 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
                 MatchType.Actor => $"{matchString} Acting",
                 MatchType.Director => $"{matchString} Directed",
                 MatchType.Tag => $"{matchString} Tagged",
+                MatchType.Writer => $"{matchString} Written",
                 _ => $"{matchString} Movies" // Default for Title and any future types
             };
         }
@@ -134,6 +136,9 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             
             // Flag to track if configuration has been initialized to prevent resetting user's intentional empty collections
             IsInitialized = false;
+
+            // Off by default: it deletes collections
+            DeleteOrphanedCollections = false;
         }
 
         public List<TitleMatchPair> TitleMatchPairs { get; set; }
@@ -144,6 +149,11 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         // Flag to indicate whether the configuration has been properly initialized
         // This prevents resetting the config when users intentionally have empty TitleMatchPairs
         public bool IsInitialized { get; set; }
+
+        // When enabled, collections this plugin created are deleted once they are
+        // removed from the configuration. Only collections carrying the plugin's own
+        // tag are ever considered.
+        public bool DeleteOrphanedCollections { get; set; }
         
         // Keep these for backward compatibility but they won't be used
         [Obsolete("Use TitleMatchPairs instead")]

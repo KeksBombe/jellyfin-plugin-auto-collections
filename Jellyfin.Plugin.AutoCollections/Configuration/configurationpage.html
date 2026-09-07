@@ -163,6 +163,22 @@
               </button>
               
               <br />
+              <div class="checkboxContainer">
+                <label class="emby-checkbox-label">
+                  <input
+                    id="delete-orphaned-collections"
+                    is="emby-checkbox"
+                    type="checkbox"
+                  />
+                  <span>Delete collections when they are removed from this configuration</span>
+                </label>
+                <div class="fieldDescription">
+                  Only affects collections created by this plugin. Collections you made yourself,
+                  or that came from another plugin, are never touched. Off by default.
+                </div>
+              </div>
+
+              <br />
               <button
                 id="saveConfiguration"
                 is="emby-button"
@@ -306,7 +322,8 @@
             { value: '2', text: 'Studio' },
             { value: '3', text: 'Actor' },
             { value: '4', text: 'Director' },
-            { value: '5', text: 'Tag' }
+            { value: '5', text: 'Tag' },
+            { value: '6', text: 'Writer' }
           ];
           
           options.forEach(opt => {
@@ -484,6 +501,9 @@
             "06ebf4a9-1326-4327-968d-8da00e1ea2eb"
           ) // Plugin Id
             .then(function (config) {
+              document.querySelector("#delete-orphaned-collections").checked =
+                config.DeleteOrphanedCollections === true;
+
               // Load simple collections
               const titleMatchPairsContainer = document.querySelector("#title-match-pairs");
               titleMatchPairsContainer.innerHTML = '';
@@ -692,6 +712,7 @@
             TitleMatchPairs: titleMatchPairs,
             ExpressionCollections: expressionCollections,
             IsInitialized: true, // Mark as initialized to prevent defaults from being re-added
+            DeleteOrphanedCollections: document.querySelector("#delete-orphaned-collections").checked,
             // Keep these empty for backward compatibility
             TagTitlePairs: [],
             Tags: []
