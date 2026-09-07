@@ -15,6 +15,37 @@
       .match-type-select {
         width: 100%;
       }
+      .preview-panel {
+        width: 100%;
+        margin-top: 8px;
+        padding: 10px 12px;
+        border-radius: 4px;
+        background-color: rgba(0,0,0,0.18);
+        font-size: 14px;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .preview-summary { margin-bottom: 6px; }
+      .preview-item { padding: 1px 0 1px 12px; }
+      .preview-added { color: #4caf50; margin-left: 8px; }
+      .preview-removed { color: #e57373; margin-left: 8px; }
+      .preview-muted { opacity: 0.7; margin-left: 8px; }
+      .preview-more { opacity: 0.7; font-style: italic; }
+      .preview-warning {
+        margin: 6px 0;
+        padding: 6px 8px;
+        border-radius: 3px;
+        background-color: rgba(229,115,115,0.18);
+      }
+      .preview-panel summary { cursor: pointer; padding: 3px 0; }
+      .preview-table { width: 100%; border-collapse: collapse; }
+      .preview-table th, .preview-table td {
+        text-align: left;
+        padding: 4px 10px 4px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+      }
+      .preview-table td.num { text-align: right; }
+
       .title-match-input {
         flex: 1;
         margin-right: 10px;
@@ -192,6 +223,17 @@
               is="emby-button"
               type="button"
               class="raised block"
+              id="preview-all-button"
+            >
+              <span>Preview All (no changes are made)</span>
+            </button>
+            <div id="preview-all-panel" class="preview-panel" style="display:none"></div>
+
+            <br />
+            <button
+              is="emby-button"
+              type="button"
+              class="raised block"
               id="sync-Auto-collections"
               onclick="execute()"
             >
@@ -201,7 +243,184 @@
         </div>
       </div>      <script type="text/javascript" defer>
         // For expression-based collections
-        function createExpressionCollectionElement(expression = '', collectionName = '', caseSensitive = false) {
+        // ---- shared row controls -------------------------------------------------
+
+        // Plugin configuration comes back with enums as either their name or their number,
+        // so both have to be understood. Names must stay in enum order.
+        const MATCH_TYPE_NAMES = ['Title', 'Genre', 'Studio', 'Actor', 'Director', 'Tag', 'Writer'];
+        const MEDIA_TYPE_NAMES = ['All', 'Movies', 'Series'];
+        const SORT_BY_NAMES = ['ReleaseYear', 'DateAdded', 'Name', 'CommunityRating', 'Runtime', 'Random'];
+        const SORT_ORDER_NAMES = ['Descending', 'Ascending'];
+
+        function enumName(index, names) {
+          const i = parseInt(index, 10);
+          return names[i] !== undefined ? names[i] : names[0];
+        }
+
+        function enumIndex(value, names) {
+          if (typeof value === 'number') {
+            return value;
+          }
+          const found = names.indexOf(value);
+          return found === -1 ? 0 : found;
+        }
+
+        const SORT_BY_OPTIONS = [
+          { value: '0', text: 'Release year' },
+          { value: '1', text: 'Date added' },
+          { value: '2', text: 'Name' },
+          { value: '3', text: 'Community rating' },
+          { value: '4', text: 'Runtime' },
+          { value: '5', text: 'Random' }
+        ];
+
+        const SORT_ORDER_OPTIONS = [
+          { value: '0', text: 'Desc' },
+          { value: '1', text: 'Asc' }
+        ];
+
+        function buildSelect(className, options, selected, width) {
+          const wrapper = document.createElement('div');
+          wrapper.style.marginRight = '10px';
+          wrapper.style.minWidth = width;
+          wrapper.style.flex = '0 0 ' + width;
+
+          const select = document.createElement('select');
+          select.is = 'emby-select';
+          select.className = className;
+          options.forEach(function (opt) {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.text = opt.text;
+            select.appendChild(option);
+          });
+          select.value = String(selected);
+          wrapper.appendChild(select);
+          return wrapper;
+        }
+
+        function buildSortControls(sortBy, sortOrder) {
+          return [
+            buildSelect('sort-by-select', SORT_BY_OPTIONS, sortBy, '130px'),
+            buildSelect('sort-order-select', SORT_ORDER_OPTIONS, sortOrder, '70px')
+          ];
+        }
+
+        function buildCheckbox(className, labelText, checked) {
+          const wrap = document.createElement('div');
+          wrap.style.display = 'flex';
+          wrap.style.alignItems = 'center';
+          wrap.style.marginRight = '10px';
+
+          const box = document.createElement('input');
+          box.is = 'emby-checkbox';
+          box.type = 'checkbox';
+          box.className = className;
+          box.checked = checked;
+
+          const label = document.createElement('span');
+          label.textContent = labelText;
+          label.style.marginLeft = '5px';
+          label.style.fontSize = '14px';
+
+          wrap.appendChild(box);
+          wrap.appendChild(label);
+          return wrap;
+        }
+
+        // ---- preview -------------------------------------------------------------
+
+        function escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text == null ? '' : String(text);
+          return div.innerHTML;
+        }
+
+        function itemLine(item) {
+          const year = item.Year ? ' (' + item.Year + ')' : '';
+          return '<div class="preview-item">' + escapeHtml(item.Name) + escapeHtml(year) + '</div>';
+        }
+
+        function itemGroup(title, items, total, truncated, open) {
+          if (total === 0) {
+            return '';
+          }
+          const shown = items.map(itemLine).join('');
+          const more = truncated || items.length < total
+            ? '<div class="preview-item preview-more">… ' + (total - items.length) + ' more</div>'
+            : '';
+          return '<details' + (open ? ' open' : '') + '>'
+            + '<summary>' + escapeHtml(title) + ' (' + total + ')</summary>'
+            + shown + more
+            + '</details>';
+        }
+
+        function renderPreview(result) {
+          if (result.Errors && result.Errors.length) {
+            return '<div class="preview-warning">Expression could not be parsed: '
+              + escapeHtml(result.Errors.join('; ')) + '</div>';
+          }
+
+          const summary = result.CollectionExists
+            ? '<b>' + result.MatchedCount + ' items</b>'
+                + '<span class="preview-added"> +' + result.AddedCount + ' added</span>'
+                + '<span class="preview-removed"> −' + result.RemovedCount + ' removed</span>'
+                + '<span class="preview-muted"> ' + result.UnchangedCount + ' unchanged</span>'
+            : '<b>' + result.MatchedCount + ' items</b>'
+                + '<span class="preview-muted"> — this collection would be created</span>';
+
+          const warnings = (result.Warnings || [])
+            .map(function (w) { return '<div class="preview-warning">⚠ ' + escapeHtml(w) + '</div>'; })
+            .join('');
+
+          // Removals are what people need to see before syncing, so that group starts open.
+          return '<div class="preview-summary">' + summary + '</div>'
+            + warnings
+            + itemGroup('Removed', result.Removed || [], result.RemovedCount, result.RemovedTruncated, true)
+            + itemGroup('Added', result.Added || [], result.AddedCount, result.AddedTruncated, false)
+            + (result.UnchangedCount > 0
+                ? '<div class="preview-muted preview-item">' + result.UnchangedCount + ' unchanged</div>'
+                : '');
+        }
+
+        function attachPreview(container, buildPayload) {
+          const panel = document.createElement('div');
+          panel.className = 'preview-panel';
+          panel.style.display = 'none';
+
+          const button = document.createElement('button');
+          button.is = 'emby-button';
+          button.type = 'button';
+          button.className = 'raised preview-button';
+          button.innerHTML = '<span>Preview</span>';
+          button.style.flex = '0 0 auto';
+          button.style.marginRight = '10px';
+
+          button.addEventListener('click', function () {
+            const payload = buildPayload();
+            if (!payload) {
+              return;
+            }
+            panel.style.display = 'block';
+            panel.innerHTML = '<div class="preview-muted preview-item">Checking…</div>';
+
+            ApiClient.ajax({
+              type: 'POST',
+              url: ApiClient.getUrl('/AutoCollections/Preview'),
+              data: JSON.stringify(payload),
+              contentType: 'application/json',
+              dataType: 'json'
+            }).then(function (result) {
+              panel.innerHTML = renderPreview(result);
+            }).catch(function () {
+              panel.innerHTML = '<div class="preview-warning">Preview failed. Check the server log.</div>';
+            });
+          });
+
+          return { button: button, panel: panel };
+        }
+
+        function createExpressionCollectionElement(expression = '', collectionName = '', caseSensitive = false, sortBy = 0, sortOrder = 0) {
           const container = document.createElement('div');
           container.className = 'expression-container';
           container.style.display = 'flex';
@@ -284,16 +503,37 @@
             container.remove();
           };
           
+          const sortControls = buildSortControls(sortBy, sortOrder);
+
+          const preview = attachPreview(container, function () {
+            const expressionValue = container.querySelector('.expression-input').value.trim();
+            if (!expressionValue) {
+              return null;
+            }
+            return {
+              Advanced: {
+                CollectionName: container.querySelector('.collection-name-input').value.trim() || 'Expression Collection',
+                Expression: expressionValue,
+                CaseSensitive: container.querySelector('.case-sensitive-checkbox').checked,
+                SortBy: parseInt(container.querySelector('.sort-by-select').value, 10),
+                SortOrder: parseInt(container.querySelector('.sort-order-select').value, 10)
+              }
+            };
+          });
+
           // Add all components
           container.appendChild(collectionNameContainer);
           container.appendChild(expressionContainer);
           container.appendChild(caseCheckContainer);
+          sortControls.forEach(function (c) { container.appendChild(c); });
+          container.appendChild(preview.button);
           container.appendChild(removeButton);
+          container.appendChild(preview.panel);
           
           return container;
         }
         
-        function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0, mediaType = 0) {
+        function createTitleMatchPairElement(titleMatch = '', collectionName = '', caseSensitive = false, matchType = 0, mediaType = 0, exactMatch = false, sortBy = 0, sortOrder = 0) {
           const container = document.createElement('div');
           container.className = 'title-match-container';
           container.style.display = 'flex';
@@ -486,13 +726,39 @@
             container.remove();
           };
           
+          const exactContainer = buildCheckbox('exact-match-checkbox', 'Exact', exactMatch);
+          const sortControls = buildSortControls(sortBy, sortOrder);
+
+          const preview = attachPreview(container, function () {
+            const matchValue = container.querySelector('.title-match-input').value.trim();
+            if (!matchValue) {
+              return null;
+            }
+            return {
+              Simple: {
+                TitleMatch: matchValue,
+                CollectionName: container.querySelector('.collection-name-input').value.trim() || 'Auto Collection',
+                CaseSensitive: container.querySelector('.case-sensitive-checkbox').checked,
+                MatchType: parseInt(container.querySelector('.match-type-select').value, 10),
+                MediaType: parseInt(container.querySelector('.media-type-select').value, 10),
+                ExactMatch: container.querySelector('.exact-match-checkbox').checked,
+                SortBy: parseInt(container.querySelector('.sort-by-select').value, 10),
+                SortOrder: parseInt(container.querySelector('.sort-order-select').value, 10)
+              }
+            };
+          });
+
           // Add all components to container in order
           container.appendChild(matchTypeContainer);
           container.appendChild(mediaTypeContainer); // Add media type dropdown
           container.appendChild(titleMatchContainer);
           container.appendChild(collectionNameContainer);
           container.appendChild(caseCheckContainer);
+          container.appendChild(exactContainer);
+          sortControls.forEach(function (c) { container.appendChild(c); });
+          container.appendChild(preview.button);
           container.appendChild(removeButton);
+          container.appendChild(preview.panel);
           
           return container;
         }
@@ -511,60 +777,20 @@
               // Check if we have the TitleMatchPairs property
               if (config.TitleMatchPairs && config.TitleMatchPairs.length > 0) {
                 config.TitleMatchPairs.forEach(pair => {                  
-                  // Convert MatchType enum string to numeric value for the dropdown
-                  let matchTypeValue = 0; // Default to Title
-                  if (pair.MatchType !== undefined) {
-                    switch (pair.MatchType) {
-                      case "Title":
-                        matchTypeValue = 0;
-                        break;
-                      case "Genre":
-                        matchTypeValue = 1;
-                        break;
-                      case "Studio":
-                        matchTypeValue = 2;
-                        break;
-                      case "Actor":
-                        matchTypeValue = 3;
-                        break;
-                      case "Director":
-                        matchTypeValue = 4;
-                        break;
-                      // Fallback for numeric values (backward compatibility)
-                      default:
-                        if (typeof pair.MatchType === 'number') {
-                          matchTypeValue = pair.MatchType;
-                        }
-                    }
-                  }
+                  const matchTypeValue = enumIndex(pair.MatchType, MATCH_TYPE_NAMES);
+                  const mediaTypeValue = enumIndex(pair.MediaType, MEDIA_TYPE_NAMES);
+                  const sortByValue = enumIndex(pair.SortBy, SORT_BY_NAMES);
+                  const sortOrderValue = enumIndex(pair.SortOrder, SORT_ORDER_NAMES);
 
-                  // Convert MediaType enum to numeric value for the dropdown
-                  let mediaTypeValue = 0; // Default to All
-                  if (pair.MediaType !== undefined) {
-                    switch (pair.MediaType) {
-                      case "All":
-                        mediaTypeValue = 0;
-                        break;
-                      case "Movies":
-                        mediaTypeValue = 1;
-                        break;
-                      case "Series":
-                        mediaTypeValue = 2;
-                        break;
-                      // Fallback for numeric values (backward compatibility)
-                      default:
-                        if (typeof pair.MediaType === 'number') {
-                          mediaTypeValue = pair.MediaType;
-                        }
-                    }
-                  }
-                  
                   const element = createTitleMatchPairElement(
-                    pair.TitleMatch, 
-                    pair.CollectionName, 
-                    pair.CaseSensitive, 
+                    pair.TitleMatch || '',
+                    pair.CollectionName || '',
+                    pair.CaseSensitive || false,
                     matchTypeValue,
-                    mediaTypeValue
+                    mediaTypeValue,
+                    pair.ExactMatch === true,
+                    sortByValue,
+                    sortOrderValue
                   );
                   titleMatchPairsContainer.appendChild(element);
                 });
@@ -587,7 +813,9 @@
                   const element = createExpressionCollectionElement(
                     collection.Expression,
                     collection.CollectionName,
-                    collection.CaseSensitive
+                    collection.CaseSensitive,
+                    enumIndex(collection.SortBy, SORT_BY_NAMES),
+                    enumIndex(collection.SortOrder, SORT_ORDER_NAMES)
                   );
                   expressionCollectionsContainer.appendChild(element);
                 });
@@ -606,7 +834,57 @@
               const expressionElement = createExpressionCollectionElement();
               document.querySelector("#expression-collections").appendChild(expressionElement);
             });
-        }        function saveConfig() {
+        }
+
+        // Builds the configuration object from what is currently on the page.
+        // Shared by Save and by Preview All, so a preview reflects unsaved edits.
+        function buildConfigPayload() {
+          const titleMatchPairs = [];
+          document.querySelectorAll('.title-match-container').forEach(container => {
+            const titleMatchInput = container.querySelector('.title-match-input');
+            if (!titleMatchInput.value.trim()) {
+              return;
+            }
+            const collectionName = container.querySelector('.collection-name-input').value.trim();
+            titleMatchPairs.push({
+              TitleMatch: titleMatchInput.value.trim(),
+              CollectionName: collectionName || null, // Use null if collection name is empty
+              CaseSensitive: container.querySelector('.case-sensitive-checkbox').checked,
+              MatchType: enumName(container.querySelector('.match-type-select').value, MATCH_TYPE_NAMES),
+              MediaType: enumName(container.querySelector('.media-type-select').value, MEDIA_TYPE_NAMES),
+              ExactMatch: container.querySelector('.exact-match-checkbox').checked,
+              SortBy: enumName(container.querySelector('.sort-by-select').value, SORT_BY_NAMES),
+              SortOrder: enumName(container.querySelector('.sort-order-select').value, SORT_ORDER_NAMES)
+            });
+          });
+
+          const expressionCollections = [];
+          document.querySelectorAll('.expression-container').forEach(container => {
+            const expressionInput = container.querySelector('.expression-input');
+            if (!expressionInput.value.trim()) {
+              return;
+            }
+            expressionCollections.push({
+              Expression: expressionInput.value.trim(),
+              CollectionName: container.querySelector('.collection-name-input').value.trim() || "Expression Collection",
+              CaseSensitive: container.querySelector('.case-sensitive-checkbox').checked,
+              SortBy: enumName(container.querySelector('.sort-by-select').value, SORT_BY_NAMES),
+              SortOrder: enumName(container.querySelector('.sort-order-select').value, SORT_ORDER_NAMES)
+            });
+          });
+
+          return {
+            TitleMatchPairs: titleMatchPairs,
+            ExpressionCollections: expressionCollections,
+            IsInitialized: true, // Mark as initialized to prevent defaults from being re-added
+            DeleteOrphanedCollections: document.querySelector("#delete-orphaned-collections").checked,
+            // Keep these empty for backward compatibility
+            TagTitlePairs: [],
+            Tags: []
+          };
+        }
+
+        function saveConfig() {
           // Validate expressions before saving
           let allExpressionContainers = document.querySelectorAll('.expression-container');
           let hasErrors = false;
@@ -626,97 +904,7 @@
             return; // Don't save if there are validation errors
           }
           
-          // Process simple collections
-          const titleMatchContainers = document.querySelectorAll('.title-match-container');
-          const titleMatchPairs = [];
-            
-          titleMatchContainers.forEach(container => {
-            // Handle our new nested structure
-            const titleMatchInput = container.querySelector('.title-match-input');
-            const collectionNameInput = container.querySelector('.collection-name-input');
-            const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
-            const matchTypeSelect = container.querySelector('.match-type-select');
-            const mediaTypeSelect = container.querySelector('.media-type-select');
-              if (titleMatchInput.value.trim()) {
-              const titleMatch = titleMatchInput.value.trim();
-              const collectionName = collectionNameInput.value.trim();
-              const caseSensitive = caseSensitiveCheckbox.checked;
-              // Convert numeric value to enum string representation
-              const matchTypeValue = parseInt(matchTypeSelect.value, 10);
-              let matchTypeString;
-              switch (matchTypeValue) {
-                case 0:
-                  matchTypeString = "Title";
-                  break;
-                case 1:
-                  matchTypeString = "Genre";
-                  break;
-                case 2:
-                  matchTypeString = "Studio";
-                  break;
-                case 3:
-                  matchTypeString = "Actor";
-                  break;
-                case 4:
-                  matchTypeString = "Director";
-                  break;
-                default:
-                  matchTypeString = "Title";
-              }
-              
-
-              // Convert numeric value to enum string representation for media type
-              const mediaTypeValue = parseInt(mediaTypeSelect.value, 10);
-              let mediaTypeString;
-              switch (mediaTypeValue) {
-                case 0:
-                  mediaTypeString = "All";
-                  break;
-                case 1:
-                  mediaTypeString = "Movies";
-                  break;
-                case 2:
-                  mediaTypeString = "Series";
-                  break;
-                default:
-                  mediaTypeString = "All";
-              }
-              
-              titleMatchPairs.push({
-                TitleMatch: titleMatch,
-                CollectionName: collectionName || null, // Use null if collection name is empty
-                CaseSensitive: caseSensitive,
-                MatchType: matchTypeString,
-                MediaType: mediaTypeString
-              });
-            }
-          });
-            // Process expression collections
-          const expressionCollections = [];
-          
-          allExpressionContainers.forEach(container => {
-            const expressionInput = container.querySelector('.expression-input');
-            const collectionNameInput = container.querySelector('.collection-name-input');
-            const caseSensitiveCheckbox = container.querySelector('.case-sensitive-checkbox');
-            
-            if (expressionInput.value.trim()) {
-              expressionCollections.push({
-                Expression: expressionInput.value.trim(),
-                CollectionName: collectionNameInput.value.trim() || "Expression Collection",
-                CaseSensitive: caseSensitiveCheckbox.checked
-              });
-            }
-          });
-          
-          const config = {
-            TitleMatchPairs: titleMatchPairs,
-            ExpressionCollections: expressionCollections,
-            IsInitialized: true, // Mark as initialized to prevent defaults from being re-added
-            DeleteOrphanedCollections: document.querySelector("#delete-orphaned-collections").checked,
-            // Keep these empty for backward compatibility
-            TagTitlePairs: [],
-            Tags: []
-          };
+          const config = buildConfigPayload();
           
           window.ApiClient.updatePluginConfiguration(
             "06ebf4a9-1326-4327-968d-8da00e1ea2eb",
@@ -743,7 +931,61 @@
                 message: "Unexpected error occurred!"
               });
             });
-        }        // Initialize the page
+        }        function collectConfigFromPage() {
+          return buildConfigPayload();
+        }
+
+        function renderPreviewAll(results) {
+          if (!results.length) {
+            return '<div class="preview-muted preview-item">No collections are configured.</div>';
+          }
+
+          const rows = results.map(function (r) {
+            const needsAttention = (r.Warnings && r.Warnings.length) || (r.Errors && r.Errors.length);
+            const status = needsAttention ? ' ⚠' : '';
+            const counts = (r.Errors && r.Errors.length)
+              ? '<td colspan="3">' + escapeHtml(r.Errors.join('; ')) + '</td>'
+              : '<td class="num">' + r.MatchedCount + '</td>'
+                + '<td class="num preview-added">+' + r.AddedCount + '</td>'
+                + '<td class="num preview-removed">−' + r.RemovedCount + '</td>';
+            return '<tr><td>' + escapeHtml(r.CollectionName) + status + '</td>' + counts + '</tr>';
+          }).join('');
+
+          const flagged = results.filter(function (r) {
+            return (r.Warnings && r.Warnings.length) || (r.Errors && r.Errors.length);
+          });
+
+          const detail = flagged.map(function (r) {
+            const notes = (r.Errors || []).concat(r.Warnings || [])
+              .map(function (w) { return '<div class="preview-warning">⚠ ' + escapeHtml(r.CollectionName) + ': ' + escapeHtml(w) + '</div>'; })
+              .join('');
+            return notes;
+          }).join('');
+
+          return '<table class="preview-table">'
+            + '<tr><th>Collection</th><th class="num">Items</th><th class="num">Added</th><th class="num">Removed</th></tr>'
+            + rows + '</table>' + detail;
+        }
+
+        document.querySelector('#preview-all-button').addEventListener('click', function () {
+          const panel = document.querySelector('#preview-all-panel');
+          panel.style.display = 'block';
+          panel.innerHTML = '<div class="preview-muted preview-item">Checking every collection…</div>';
+
+          ApiClient.ajax({
+            type: 'POST',
+            url: ApiClient.getUrl('/AutoCollections/PreviewAll'),
+            data: JSON.stringify(collectConfigFromPage()),
+            contentType: 'application/json',
+            dataType: 'json'
+          }).then(function (results) {
+            panel.innerHTML = renderPreviewAll(results);
+          }).catch(function () {
+            panel.innerHTML = '<div class="preview-warning">Preview failed. Check the server log.</div>';
+          });
+        });
+
+        // Initialize the page
         loadConfig();
         
         // Add event listeners

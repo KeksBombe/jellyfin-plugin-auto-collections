@@ -186,6 +186,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
         public string CollectionName { get; set; }
         public string Expression { get; set; }
         public bool CaseSensitive { get; set; }
+        public CollectionSortBy SortBy { get; set; }
+        public CollectionSortOrder SortOrder { get; set; }
 
         // Make ParsedExpression and ParseErrors non-serializable
         [System.Xml.Serialization.XmlIgnore]
@@ -202,6 +204,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             CollectionName = "Auto Collection";
             Expression = string.Empty;
             CaseSensitive = false;
+            SortBy = CollectionSortBy.ReleaseYear;
+            SortOrder = CollectionSortOrder.Descending;
             ParseErrors = new List<string>();
         }
 
@@ -210,6 +214,8 @@ namespace Jellyfin.Plugin.AutoCollections.Configuration
             CollectionName = collectionName;
             Expression = expression;
             CaseSensitive = caseSensitive;
+            SortBy = CollectionSortBy.ReleaseYear;
+            SortOrder = CollectionSortOrder.Descending;
             ParseErrors = new List<string>();
 
             // Parse expression when created

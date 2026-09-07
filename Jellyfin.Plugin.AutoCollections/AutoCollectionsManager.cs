@@ -22,13 +22,6 @@ using Jellyfin.Plugin.AutoCollections.Configuration;
 
 namespace Jellyfin.Plugin.AutoCollections
 {
-    // Internal enum for sort order
-    internal enum SortOrder
-    {
-        Ascending,
-        Descending
-    }
-    
     // ================================================================
     // CLASS DECLARATION AND DEPENDENCY INJECTION
     // ================================================================
@@ -252,7 +245,7 @@ namespace Jellyfin.Plugin.AutoCollections
         // ================================================================
         // This section contains methods that work with both movies and series,
         // providing generic search functionality based on match types and patterns.
-        private IEnumerable<Movie> GetMoviesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType)
+        private IEnumerable<Movie> GetMoviesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType, bool exactMatch = false)
         {
             // Get all non-null movies from the library
             var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
@@ -265,36 +258,39 @@ namespace Jellyfin.Plugin.AutoCollections
             StringComparison comparison = caseSensitive 
                 ? StringComparison.Ordinal 
                 : StringComparison.OrdinalIgnoreCase;
+
+            // With exact matching the search string has to be the whole value rather than
+            // appear somewhere inside it.
+            bool Matches(string? candidate) =>
+                !string.IsNullOrEmpty(candidate) && (exactMatch
+                    ? candidate.Equals(matchString, comparison)
+                    : candidate.Contains(matchString, comparison));
             
             // Filter movies based on match type
             return matchType switch
             {
-                Configuration.MatchType.Title => allMovies.Where(movie => 
-                    !string.IsNullOrEmpty(movie.Name) && movie.Name.Contains(matchString, comparison)),
+                Configuration.MatchType.Title => allMovies.Where(movie => Matches(movie.Name)),
                 
                 Configuration.MatchType.Genre => allMovies.Where(movie => 
-                    movie.Genres != null && movie.Genres.Any(genre => 
-                        !string.IsNullOrEmpty(genre) && genre.Contains(matchString, comparison))),
+                    movie.Genres != null && movie.Genres.Any(Matches)),
                 
                 Configuration.MatchType.Studio => allMovies.Where(movie => 
-                    movie.Studios != null && movie.Studios.Any(studio => 
-                        !string.IsNullOrEmpty(studio) && studio.Contains(matchString, comparison))),
+                    movie.Studios != null && movie.Studios.Any(Matches)),
                 
-                Configuration.MatchType.Actor => GetMoviesWithPerson(matchString, "Actor", caseSensitive),
+                Configuration.MatchType.Actor => GetMoviesWithPerson(matchString, "Actor", caseSensitive, exactMatch),
                 
-                Configuration.MatchType.Director => GetMoviesWithPerson(matchString, "Director", caseSensitive),
+                Configuration.MatchType.Director => GetMoviesWithPerson(matchString, "Director", caseSensitive, exactMatch),
                 
                 Configuration.MatchType.Tag => allMovies.Where(movie => 
                     movie.Tags != null && movie.Tags.Any(tag => 
                         !string.IsNullOrEmpty(tag) && tag.Equals(matchString, comparison))),
                 
-                Configuration.MatchType.Writer => GetMoviesWithPerson(matchString, "Writer", caseSensitive),
+                Configuration.MatchType.Writer => GetMoviesWithPerson(matchString, "Writer", caseSensitive, exactMatch),
                 
-                _ => allMovies.Where(movie => 
-                    !string.IsNullOrEmpty(movie.Name) && movie.Name.Contains(matchString, comparison))
+                _ => allMovies.Where(movie => Matches(movie.Name))
             };
         }
-          private IEnumerable<Series> GetSeriesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType)
+          private IEnumerable<Series> GetSeriesFromLibraryByMatch(string matchString, bool caseSensitive, Configuration.MatchType matchType, bool exactMatch = false)
                 {
                     // Get all series from the library
                     var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
@@ -306,34 +302,37 @@ namespace Jellyfin.Plugin.AutoCollections
                     
                     StringComparison comparison = caseSensitive 
                         ? StringComparison.Ordinal 
-                        : StringComparison.OrdinalIgnoreCase;              // Filter series based on match type
+                        : StringComparison.OrdinalIgnoreCase;
+
+                    bool Matches(string? candidate) =>
+                        !string.IsNullOrEmpty(candidate) && (exactMatch
+                            ? candidate.Equals(matchString, comparison)
+                            : candidate.Contains(matchString, comparison));
+
+                    // Filter series based on match type
                     return matchType switch
                     {
-                        Configuration.MatchType.Title => allSeries.Where(series => 
-                            series.Name != null && series.Name.Contains(matchString, comparison)),
+                        Configuration.MatchType.Title => allSeries.Where(series => Matches(series.Name)),
                         
                         Configuration.MatchType.Genre => allSeries.Where(series => 
-                            series.Genres != null && series.Genres.Any(genre => 
-                                genre.Contains(matchString, comparison))),
+                            series.Genres != null && series.Genres.Any(Matches)),
                         
                         Configuration.MatchType.Studio => allSeries.Where(series => 
-                            series.Studios != null && series.Studios.Any(studio => 
-                                studio.Contains(matchString, comparison))),
+                            series.Studios != null && series.Studios.Any(Matches)),
                         
                         // Use GetSeriesWithPerson which properly verifies the person's role in each series
-                        Configuration.MatchType.Actor => GetSeriesWithPerson(matchString, "Actor", caseSensitive),
+                        Configuration.MatchType.Actor => GetSeriesWithPerson(matchString, "Actor", caseSensitive, exactMatch),
                         
                         // Use GetSeriesWithPerson which properly verifies the person's role in each series
-                        Configuration.MatchType.Director => GetSeriesWithPerson(matchString, "Director", caseSensitive),
+                        Configuration.MatchType.Director => GetSeriesWithPerson(matchString, "Director", caseSensitive, exactMatch),
                         
                         Configuration.MatchType.Tag => allSeries.Where(series => 
                             series.Tags != null && series.Tags.Any(tag => 
                                 !string.IsNullOrEmpty(tag) && tag.Equals(matchString, comparison))),
                         
-                        Configuration.MatchType.Writer => GetSeriesWithPerson(matchString, "Writer", caseSensitive),
+                        Configuration.MatchType.Writer => GetSeriesWithPerson(matchString, "Writer", caseSensitive, exactMatch),
                         
-                        _ => allSeries.Where(series => 
-                            series.Name != null && series.Name.Contains(matchString, comparison)) // Default to title match
+                        _ => allSeries.Where(series => Matches(series.Name)) // Default to title match
                     };
                 }
           // Keep these for backward compatibility
@@ -385,7 +384,11 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
 
-        private async Task AddWantedMediaItems(BoxSet collection, IEnumerable<BaseItem> wantedMediaItems)
+        private async Task AddWantedMediaItems(
+            BoxSet collection,
+            IEnumerable<BaseItem> wantedMediaItems,
+            Configuration.CollectionSortBy sortBy = Configuration.CollectionSortBy.ReleaseYear,
+            Configuration.CollectionSortOrder sortOrder = Configuration.CollectionSortOrder.Descending)
         {
             // Get the set of IDs for items currently in the collection
             var existingItemIds = collection.GetLinkedChildren()
@@ -393,11 +396,12 @@ namespace Jellyfin.Plugin.AutoCollections
                 .ToHashSet();            
 
             // Create LinkedChild objects for items that aren't already in the collection
-            var itemsToAdd = wantedMediaItems
-                .Where(item => !existingItemIds.Contains(item.Id))
-                .OrderByDescending(item => item.ProductionYear)
-                .ThenByDescending(item => item.PremiereDate ?? DateTime.MinValue)
-                .ToList();
+            // Inserted in the collection's own order so the stored order is already right for
+            // the sorts Jellyfin cannot do itself.
+            var itemsToAdd = ApplySortOrder(
+                wantedMediaItems.Where(item => !existingItemIds.Contains(item.Id)),
+                sortBy,
+                sortOrder);
 
             if (itemsToAdd.Count > 0)
             {
@@ -424,8 +428,99 @@ namespace Jellyfin.Plugin.AutoCollections
             }
         }
 
-        private async Task SortCollectionBy(BoxSet collection, SortOrder sortOrder)
+        /// <summary>
+        /// The <see cref="ItemSortBy"/> name Jellyfin understands for a sort field, or null when
+        /// the plugin has to order the items itself.
+        /// </summary>
+        private static string? GetNativeDisplayOrder(Configuration.CollectionSortBy sortBy)
         {
+            return sortBy switch
+            {
+                Configuration.CollectionSortBy.ReleaseYear => "PremiereDate",
+                Configuration.CollectionSortBy.DateAdded => "DateCreated",
+                Configuration.CollectionSortBy.Name => "SortName",
+                Configuration.CollectionSortBy.CommunityRating => "CommunityRating",
+                Configuration.CollectionSortBy.Runtime => "Runtime",
+                Configuration.CollectionSortBy.Random => "Random",
+                _ => null
+            };
+        }
+
+        /// <summary>
+        /// Decides how a collection's order is applied.
+        /// </summary>
+        /// <remarks>
+        /// Jellyfin sorts a BoxSet by its DisplayOrder field, but always ascending
+        /// (see BoxSet.Sort). So ascending orders are handed to Jellyfin, which costs nothing
+        /// and keeps working as the library changes, while descending has to be produced here by
+        /// controlling the order items are stored in - with DisplayOrder left on "Default", which
+        /// is the value that makes Jellyfin return them untouched. Random is inherently
+        /// orderless, so it always goes to Jellyfin.
+        /// </remarks>
+        private static bool UsesNativeSorting(Configuration.CollectionSortBy sortBy, Configuration.CollectionSortOrder sortOrder)
+        {
+            if (sortBy == Configuration.CollectionSortBy.Random)
+            {
+                return true;
+            }
+
+            return sortOrder == Configuration.CollectionSortOrder.Ascending
+                && GetNativeDisplayOrder(sortBy) != null;
+        }
+
+        private static string GetDisplayOrderValue(Configuration.CollectionSortBy sortBy, Configuration.CollectionSortOrder sortOrder)
+        {
+            return UsesNativeSorting(sortBy, sortOrder)
+                ? GetNativeDisplayOrder(sortBy) ?? "Default"
+                : "Default";
+        }
+
+        /// <summary>
+        /// Orders items the way the collection is configured, for the cases Jellyfin cannot do itself.
+        /// </summary>
+        private static List<BaseItem> ApplySortOrder(
+            IEnumerable<BaseItem> items,
+            Configuration.CollectionSortBy sortBy,
+            Configuration.CollectionSortOrder sortOrder)
+        {
+            var descending = sortOrder == Configuration.CollectionSortOrder.Descending;
+
+            IOrderedEnumerable<BaseItem> ordered = sortBy switch
+            {
+                Configuration.CollectionSortBy.DateAdded => descending
+                    ? items.OrderByDescending(item => item.DateCreated)
+                    : items.OrderBy(item => item.DateCreated),
+                Configuration.CollectionSortBy.Name => descending
+                    ? items.OrderByDescending(item => item.SortName ?? item.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    : items.OrderBy(item => item.SortName ?? item.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase),
+                Configuration.CollectionSortBy.CommunityRating => descending
+                    ? items.OrderByDescending(item => item.CommunityRating ?? 0f)
+                    : items.OrderBy(item => item.CommunityRating ?? 0f),
+                Configuration.CollectionSortBy.Runtime => descending
+                    ? items.OrderByDescending(item => item.RunTimeTicks ?? 0L)
+                    : items.OrderBy(item => item.RunTimeTicks ?? 0L),
+                _ => descending
+                    ? items.OrderByDescending(item => item.ProductionYear)
+                        .ThenByDescending(item => item.PremiereDate ?? DateTime.MinValue)
+                    : items.OrderBy(item => item.ProductionYear)
+                        .ThenBy(item => item.PremiereDate ?? DateTime.MinValue)
+            };
+
+            // Tie-break on id so a given set of items always lands in the same order
+            return ordered.ThenBy(item => item.Id).ToList();
+        }
+
+        private async Task SortCollectionBy(
+            BoxSet collection,
+            Configuration.CollectionSortBy sortBy,
+            Configuration.CollectionSortOrder sortOrder)
+        {
+            if (UsesNativeSorting(sortBy, sortOrder))
+            {
+                // Jellyfin orders these on read, so there is nothing to rearrange here.
+                return;
+            }
+
             // Get the current items in the collection
             var currentItems = collection.GetLinkedChildren().ToList();
 
@@ -435,17 +530,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 return;
             }
 
-            // Sort the items based on the sort order
-            var sortedItems =
-                sortOrder == SortOrder.Ascending
-                    ? currentItems
-                        .OrderBy(item => item.ProductionYear)
-                        .ThenBy(item => item.PremiereDate ?? DateTime.MinValue)
-                        .ToList()
-                    : currentItems
-                        .OrderByDescending(item => item.ProductionYear)
-                        .ThenByDescending(item => item.PremiereDate ?? DateTime.MinValue)
-                        .ToList();
+            var sortedItems = ApplySortOrder(currentItems, sortBy, sortOrder);
 
             // Find the first index where items differ
             int firstDifferenceIndex = -1;
@@ -640,7 +725,10 @@ namespace Jellyfin.Plugin.AutoCollections
         /// Fetches the collection for <paramref name="collectionName"/>, creating it when missing,
         /// and makes sure the plugin's ownership tag and metadata locks are actually persisted.
         /// </summary>
-        private async Task<(BoxSet Collection, bool IsNew)> GetOrCreateCollectionAsync(string collectionName)
+        private async Task<(BoxSet Collection, bool IsNew)> GetOrCreateCollectionAsync(
+            string collectionName,
+            Configuration.CollectionSortBy sortBy = Configuration.CollectionSortBy.ReleaseYear,
+            Configuration.CollectionSortOrder sortOrder = Configuration.CollectionSortOrder.Descending)
         {
             var collection = GetBoxSetByName(collectionName);
             var isNew = false;
@@ -656,7 +744,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 isNew = true;
             }
 
-            await ApplyCollectionMetadataAsync(collection, collectionName);
+            await ApplyCollectionMetadataAsync(collection, collectionName, sortBy, sortOrder);
             return (collection, isNew);
         }
 
@@ -671,7 +759,11 @@ namespace Jellyfin.Plugin.AutoCollections
         /// and - because the plugin could no longer find the renamed collection - create a
         /// replacement on the next run while the old one was cleaned up.
         /// </remarks>
-        private async Task ApplyCollectionMetadataAsync(BoxSet collection, string collectionName)
+        private async Task ApplyCollectionMetadataAsync(
+            BoxSet collection,
+            string collectionName,
+            Configuration.CollectionSortBy sortBy = Configuration.CollectionSortBy.ReleaseYear,
+            Configuration.CollectionSortOrder sortOrder = Configuration.CollectionSortOrder.Descending)
         {
             var changed = false;
 
@@ -711,9 +803,10 @@ namespace Jellyfin.Plugin.AutoCollections
                 changed = true;
             }
 
-            if (!string.Equals(collection.DisplayOrder, "Default", StringComparison.Ordinal))
+            var displayOrder = GetDisplayOrderValue(sortBy, sortOrder);
+            if (!string.Equals(collection.DisplayOrder, displayOrder, StringComparison.Ordinal))
             {
-                collection.DisplayOrder = "Default";
+                collection.DisplayOrder = displayOrder;
                 changed = true;
             }
 
@@ -727,6 +820,173 @@ namespace Jellyfin.Plugin.AutoCollections
                 collection.GetParent(),
                 ItemUpdateType.MetadataEdit,
                 CancellationToken.None).ConfigureAwait(true);
+        }
+
+        // ================================================================
+        // PREVIEW METHODS
+        // ================================================================
+        // Read-only evaluation used by the dry run. Nothing here writes to the
+        // library, so a preview is safe to run at any time, including during a sync.
+
+        // Long lists are pointless to render and expensive to ship, so each side is capped.
+        private const int MaxPreviewItems = 200;
+
+        /// <summary>
+        /// Works out what a sync would do to the collection for <paramref name="titleMatchPair"/>.
+        /// </summary>
+        public CollectionPreview PreviewTitleMatchPair(TitleMatchPair titleMatchPair)
+        {
+            var matched = GetMatchingItemsForTitleMatchPair(titleMatchPair);
+            return BuildPreview(titleMatchPair.CollectionName, matched, null);
+        }
+
+        /// <summary>
+        /// Works out what a sync would do to the collection for <paramref name="expressionCollection"/>.
+        /// </summary>
+        public CollectionPreview PreviewExpressionCollection(Configuration.ExpressionCollection expressionCollection)
+        {
+            if (!expressionCollection.ParseExpression())
+            {
+                return new CollectionPreview
+                {
+                    CollectionName = expressionCollection.CollectionName,
+                    CollectionExists = GetBoxSetByName(expressionCollection.CollectionName) != null,
+                    Errors = expressionCollection.ParseErrors.ToList()
+                };
+            }
+
+            var matched = GetMatchingItemsForExpressionCollection(expressionCollection);
+            return BuildPreview(expressionCollection.CollectionName, matched, expressionCollection.Expression);
+        }
+
+        /// <summary>
+        /// Previews every collection in a configuration.
+        /// </summary>
+        /// <remarks>
+        /// The person cache is opened once for the whole batch, the same way a real run does it,
+        /// so previewing everything costs about what one sync costs minus the writes.
+        /// </remarks>
+        public List<CollectionPreview> PreviewConfiguration(PluginConfiguration configuration)
+        {
+            var results = new List<CollectionPreview>();
+
+            InitializePersonCache();
+            try
+            {
+                foreach (var pair in configuration.TitleMatchPairs ?? new List<TitleMatchPair>())
+                {
+                    results.Add(PreviewTitleMatchPair(pair));
+                }
+
+                foreach (var expression in configuration.ExpressionCollections ?? new List<Configuration.ExpressionCollection>())
+                {
+                    results.Add(PreviewExpressionCollection(expression));
+                }
+            }
+            finally
+            {
+                ClearPersonCache();
+            }
+
+            return results;
+        }
+
+        private CollectionPreview BuildPreview(string collectionName, List<BaseItem> matchedItems, string? expression)
+        {
+            var collection = GetBoxSetByName(collectionName);
+            var current = collection?.GetLinkedChildren().ToList() ?? new List<BaseItem>();
+
+            var matchedIds = matchedItems.Select(i => i.Id).ToHashSet();
+            var currentIds = current.Select(i => i.Id).ToHashSet();
+
+            var added = matchedItems.Where(i => !currentIds.Contains(i.Id)).ToList();
+            var removed = current.Where(i => !matchedIds.Contains(i.Id)).ToList();
+
+            var preview = new CollectionPreview
+            {
+                CollectionName = collectionName,
+                CollectionExists = collection != null,
+                MatchedCount = matchedItems.Count,
+                CurrentCount = current.Count,
+                UnchangedCount = current.Count - removed.Count,
+                AddedCount = added.Count,
+                RemovedCount = removed.Count,
+                Added = added.Take(MaxPreviewItems).Select(ToPreviewItem).ToList(),
+                Removed = removed.Take(MaxPreviewItems).Select(ToPreviewItem).ToList(),
+                AddedTruncated = added.Count > MaxPreviewItems,
+                RemovedTruncated = removed.Count > MaxPreviewItems
+            };
+
+            preview.Warnings.AddRange(BuildWarnings(preview, expression));
+            return preview;
+        }
+
+        private static PreviewItem ToPreviewItem(BaseItem item)
+        {
+            return new PreviewItem
+            {
+                Name = item.Name ?? "(no title)",
+                Year = item.ProductionYear,
+                Type = item is Movie ? "Movie" : item is Series ? "Series" : "Item"
+            };
+        }
+
+        /// <summary>
+        /// Flags the shapes of result that usually mean the rule is not what the author intended.
+        /// </summary>
+        private List<string> BuildWarnings(CollectionPreview preview, string? expression)
+        {
+            var warnings = new List<string>();
+
+            if (preview.MatchedCount == 0)
+            {
+                warnings.Add(preview.CollectionExists && preview.CurrentCount > 0
+                    ? $"Nothing matches, so all {preview.CurrentCount} items currently in this collection would be removed"
+                    : "Nothing in the library matches this rule");
+            }
+            else if (preview.CollectionExists && preview.CurrentCount > 0 && preview.RemovedCount == preview.CurrentCount)
+            {
+                warnings.Add($"Every one of the {preview.CurrentCount} items currently in this collection would be replaced");
+            }
+            else if (preview.RemovedCount > 0 && preview.RemovedCount >= preview.CurrentCount / 2)
+            {
+                warnings.Add($"{preview.RemovedCount} of the {preview.CurrentCount} items currently in this collection would be removed");
+            }
+
+            var libraryTotal = GetLibraryItemCount();
+            if (libraryTotal > 0 && preview.MatchedCount > libraryTotal / 2)
+            {
+                warnings.Add($"Matches {preview.MatchedCount} of {libraryTotal} items in the library - check the rule is doing what you expect");
+            }
+
+            if (!string.IsNullOrEmpty(expression) &&
+                expression.Contains(" OR ", StringComparison.OrdinalIgnoreCase) &&
+                expression.Contains(" AND ", StringComparison.OrdinalIgnoreCase) &&
+                !expression.Contains('('))
+            {
+                warnings.Add("This mixes AND and OR without brackets. AND binds first, so add brackets if you meant otherwise");
+            }
+
+            return warnings;
+        }
+
+        private int _libraryItemCount = -1;
+
+        private int GetLibraryItemCount()
+        {
+            if (_libraryItemCount >= 0)
+            {
+                return _libraryItemCount;
+            }
+
+            _libraryItemCount = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Series },
+                IsVirtualItem = false,
+                Recursive = true
+            }).Count;
+
+            return _libraryItemCount;
         }
 
         // ================================================================
@@ -1251,8 +1511,8 @@ namespace Jellyfin.Plugin.AutoCollections
             var mediaItems = DedupeMediaItems(allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>()).ToList());
 
             await RemoveUnwantedMediaItems(collection, mediaItems);
-            await AddWantedMediaItems(collection, mediaItems);
-            await SortCollectionBy(collection, SortOrder.Descending);
+            await AddWantedMediaItems(collection, mediaItems, Configuration.CollectionSortBy.ReleaseYear, Configuration.CollectionSortOrder.Descending);
+            await SortCollectionBy(collection, Configuration.CollectionSortBy.ReleaseYear, Configuration.CollectionSortOrder.Descending);
             
             // Re-fetch the collection to get its updated children
             var updatedCollection = _libraryManager.GetItemById(collection.Id) as BoxSet;
@@ -1284,6 +1544,43 @@ namespace Jellyfin.Plugin.AutoCollections
         // ================================================================
         // This section contains methods for processing title match pairs and
         // creating collections based on pattern matching criteria.
+        /// <summary>
+        /// Resolves the items a simple collection should contain, without touching the collection.
+        /// </summary>
+        /// <remarks>Shared by the sync and by the preview endpoint, so both see the same result.</remarks>
+        private List<BaseItem> GetMatchingItemsForTitleMatchPair(TitleMatchPair titleMatchPair)
+        {
+            var allMovies = new List<Movie>();
+            var allSeries = new List<Series>();
+
+            var includeMovies = titleMatchPair.MediaType != Configuration.MediaTypeFilter.Series;
+            var includeSeries = titleMatchPair.MediaType != Configuration.MediaTypeFilter.Movies;
+
+            if (includeMovies)
+            {
+                allMovies = GetMoviesFromLibraryByMatch(
+                    titleMatchPair.TitleMatch,
+                    titleMatchPair.CaseSensitive,
+                    titleMatchPair.MatchType,
+                    titleMatchPair.ExactMatch).ToList();
+            }
+
+            if (includeSeries)
+            {
+                allSeries = GetSeriesFromLibraryByMatch(
+                    titleMatchPair.TitleMatch,
+                    titleMatchPair.CaseSensitive,
+                    titleMatchPair.MatchType,
+                    titleMatchPair.ExactMatch).ToList();
+            }
+
+            _logger.LogInformation(
+                "Found {MovieCount} movies and {SeriesCount} series matching '{Pattern}' for collection '{CollectionName}'",
+                allMovies.Count, allSeries.Count, titleMatchPair.TitleMatch, titleMatchPair.CollectionName);
+
+            return DedupeMediaItems(allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>()).ToList());
+        }
+
         private async Task ExecuteAutoCollectionsForTitleMatchPair(TitleMatchPair titleMatchPair)
         {            string matchTypeText = titleMatchPair.MatchType switch
             {
@@ -1311,90 +1608,16 @@ namespace Jellyfin.Plugin.AutoCollections
             var collectionName = titleMatchPair.CollectionName;
             
             // Get or create the collection
-            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName);
+            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName, titleMatchPair.SortBy, titleMatchPair.SortOrder);
               
             _logger.LogDebug("Title Match Collection '{CollectionName}' - Pattern: '{Pattern}', Match Type: {MatchType}, Case Sensitive: {CaseSensitive}", 
                 collectionName, titleMatchPair.TitleMatch, titleMatchPair.MatchType, titleMatchPair.CaseSensitive);
             
-            // Find all media items that match the pattern based on match type
-            List<Movie> allMovies = new();
-            List<Series> allSeries = new();
-            
-            // Apply media type filter
-            switch (titleMatchPair.MediaType)
-            {
-                case Configuration.MediaTypeFilter.Movies:
-                    // Only include movies
-                    _logger.LogDebug("Media filter: Movies only");
-                    allMovies = GetMoviesFromLibraryByMatch(
-                        titleMatchPair.TitleMatch, 
-                        titleMatchPair.CaseSensitive, 
-                        titleMatchPair.MatchType
-                    ).ToList();
-                    _logger.LogInformation($"Media filter: Movies only - found {allMovies.Count} matching items");
-                    
-                    foreach (var movie in allMovies)
-                    {
-                        var year = movie.ProductionYear?.ToString() ?? "Unknown year";
-                        _logger.LogDebug("  + Movie: '{Title}' ({Year})", movie.Name, year);
-                    }
-                    break;
-                    
-                case Configuration.MediaTypeFilter.Series:
-                    // Only include TV series
-                    _logger.LogDebug("Media filter: Series only");
-                    allSeries = GetSeriesFromLibraryByMatch(
-                        titleMatchPair.TitleMatch, 
-                        titleMatchPair.CaseSensitive, 
-                        titleMatchPair.MatchType
-                    ).ToList();
-                    _logger.LogInformation($"Media filter: Series only - found {allSeries.Count} matching items");
-                    
-                    foreach (var series in allSeries)
-                    {
-                        var year = series.ProductionYear?.ToString() ?? "Unknown year";
-                        _logger.LogDebug("  + Series: '{Title}' ({Year})", series.Name, year);
-                    }
-                    break;
-                    
-                case Configuration.MediaTypeFilter.All:
-                default:
-                    // Include both movies and series (default behavior)
-                    _logger.LogDebug("Media filter: All (movies and series)");
-                    allMovies = GetMoviesFromLibraryByMatch(
-                        titleMatchPair.TitleMatch, 
-                        titleMatchPair.CaseSensitive, 
-                        titleMatchPair.MatchType
-                    ).ToList();
-                    
-                    allSeries = GetSeriesFromLibraryByMatch(
-                        titleMatchPair.TitleMatch, 
-                        titleMatchPair.CaseSensitive, 
-                        titleMatchPair.MatchType
-                    ).ToList();
-                    _logger.LogInformation($"Media filter: All - found {allMovies.Count} movies and {allSeries.Count} series");
-                    
-                    foreach (var movie in allMovies)
-                    {
-                        var year = movie.ProductionYear?.ToString() ?? "Unknown year";
-                        _logger.LogDebug("  + Movie: '{Title}' ({Year})", movie.Name, year);
-                    }
-                    
-                    foreach (var series in allSeries)
-                    {
-                        var year = series.ProductionYear?.ToString() ?? "Unknown year";
-                        _logger.LogDebug("  + Series: '{Title}' ({Year})", series.Name, year);
-                    }
-                    break;
-            }
-            
-            _logger.LogInformation($"Found {allMovies.Count} movies and {allSeries.Count} series matching {matchTypeText} pattern '{titleMatchPair.TitleMatch}' for collection: {collectionName}");
-            
-            var mediaItems = DedupeMediaItems(allMovies.Cast<BaseItem>().Concat(allSeries.Cast<BaseItem>()).ToList());
+            var mediaItems = GetMatchingItemsForTitleMatchPair(titleMatchPair);
 
             await RemoveUnwantedMediaItems(collection, mediaItems);
-            await AddWantedMediaItems(collection, mediaItems);
-            await SortCollectionBy(collection, SortOrder.Descending);
+            await AddWantedMediaItems(collection, mediaItems, titleMatchPair.SortBy, titleMatchPair.SortOrder);
+            await SortCollectionBy(collection, titleMatchPair.SortBy, titleMatchPair.SortOrder);
             
             // Re-fetch the collection to get its updated children
             var updatedCollection = _libraryManager.GetItemById(collection.Id) as BoxSet;
@@ -1551,7 +1774,7 @@ namespace Jellyfin.Plugin.AutoCollections
         /// back and filtering in memory is what made large libraries with many actor/director
         /// collections take hours: that full scan ran once per person term, per collection.
         /// </remarks>
-        private List<Person> FindPersonsByName(string nameToMatch, bool caseSensitive)
+        private List<Person> FindPersonsByName(string nameToMatch, bool caseSensitive, bool exactMatch = false)
         {
             StringComparison comparison = caseSensitive
                 ? StringComparison.Ordinal
@@ -1565,7 +1788,9 @@ namespace Jellyfin.Plugin.AutoCollections
             }).OfType<Person>()
                 // NameContains is case-insensitive in the query, so a case-sensitive
                 // search still has to be narrowed down here.
-                .Where(p => p.Name != null && p.Name.Contains(nameToMatch, comparison))
+                .Where(p => p.Name != null && (exactMatch
+                    ? p.Name.Equals(nameToMatch, comparison)
+                    : p.Name.Contains(nameToMatch, comparison)))
                 .ToList();
         }
 
@@ -1573,9 +1798,9 @@ namespace Jellyfin.Plugin.AutoCollections
         // that match the given string (partial or exact matching)
         // This method uses Jellyfin's PersonTypes query parameter to ensure only
         // movies where the person has the specified role are returned
-        private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
+        private IEnumerable<Movie> GetMoviesWithPerson(string personNameToMatch, string personType, bool caseSensitive, bool exactMatch = false)
         {
-            var persons = FindPersonsByName(personNameToMatch, caseSensitive);
+            var persons = FindPersonsByName(personNameToMatch, caseSensitive, exactMatch);
 
             _logger.LogDebug("Found {Count} person(s) matching '{NameToMatch}' for {PersonType} search", 
                 persons.Count, personNameToMatch, personType);
@@ -1619,9 +1844,9 @@ namespace Jellyfin.Plugin.AutoCollections
         // that match the given string (partial or exact matching)
         // This method uses Jellyfin's PersonTypes query parameter to ensure only
         // series where the person has the specified role are returned
-        private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive)
+        private IEnumerable<Series> GetSeriesWithPerson(string personNameToMatch, string personType, bool caseSensitive, bool exactMatch = false)
         {
-            var persons = FindPersonsByName(personNameToMatch, caseSensitive);
+            var persons = FindPersonsByName(personNameToMatch, caseSensitive, exactMatch);
 
             _logger.LogDebug("Found {Count} person(s) matching '{NameToMatch}' for {PersonType} search", 
                 persons.Count, personNameToMatch, personType);
@@ -2001,7 +2226,74 @@ namespace Jellyfin.Plugin.AutoCollections
         // ================================================================
         // This section contains methods for processing expression-based
         // collections using complex criteria and boolean logic.
-          // Process expression collections
+          /// <summary>
+        /// Resolves the items an advanced collection should contain, without touching the collection.
+        /// </summary>
+        /// <remarks>
+        /// Assumes the expression has already been parsed. Shared by the sync and by the preview
+        /// endpoint so both evaluate identically.
+        /// </remarks>
+        private List<BaseItem> GetMatchingItemsForExpressionCollection(Configuration.ExpressionCollection expressionCollection)
+        {
+            if (expressionCollection.ParsedExpression == null)
+            {
+                return new List<BaseItem>();
+            }
+
+            var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                IsVirtualItem = false,
+                Recursive = true
+            }).OfType<Movie>().ToList();
+
+            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Series },
+                IsVirtualItem = false,
+                Recursive = true
+            }).OfType<Series>().ToList();
+
+            _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to evaluate",
+                allMovies.Count, allSeries.Count);
+
+            // Normally the cache is opened once for the whole run; only take ownership
+            // of it here when this collection is being evaluated on its own.
+            var ownsPersonCache = _personToMoviesCache == null;
+            if (ownsPersonCache)
+            {
+                InitializePersonCache();
+            }
+
+            try
+            {
+                var matchingMovies = allMovies
+                    .Where(movie => movie != null)
+                    .Where(movie => expressionCollection.ParsedExpression.Evaluate(
+                        (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)))
+                    .ToList();
+
+                var matchingSeries = allSeries
+                    .Where(series => series != null)
+                    .Where(series => expressionCollection.ParsedExpression.Evaluate(
+                        (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)))
+                    .ToList();
+
+                _logger.LogInformation("Expression matched {MovieCount} movies and {SeriesCount} series",
+                    matchingMovies.Count, matchingSeries.Count);
+
+                return DedupeMediaItems(matchingMovies.Cast<BaseItem>().Concat(matchingSeries.Cast<BaseItem>()).ToList());
+            }
+            finally
+            {
+                if (ownsPersonCache)
+                {
+                    ClearPersonCache();
+                }
+            }
+        }
+
+        // Process expression collections
         private async Task ExecuteAutoCollectionsForExpressionCollection(Configuration.ExpressionCollection expressionCollection)
         {
             _logger.LogInformation("Processing expression collection: {CollectionName}", expressionCollection.CollectionName);
@@ -2017,106 +2309,14 @@ namespace Jellyfin.Plugin.AutoCollections
             
             // Get or create the collection
             var collectionName = expressionCollection.CollectionName;
-            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName);
+            var (collection, isNewCollection) = await GetOrCreateCollectionAsync(collectionName, expressionCollection.SortBy, expressionCollection.SortOrder);
             
-            // Get all movies and series from the library
-            var allMovies = _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Movie },
-                IsVirtualItem = false,
-                Recursive = true
-            }).OfType<Movie>().ToList();
-            
-            var allSeries = _libraryManager.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Series },
-                IsVirtualItem = false,
-                Recursive = true
-            }).OfType<Series>().ToList();
-            
-            _logger.LogInformation("Found {MovieCount} movies and {SeriesCount} series to evaluate", 
-                allMovies.Count, allSeries.Count);
-            
-            _logger.LogDebug("Expression collection '{CollectionName}' - Expression: {Expression}", 
-                collectionName, expressionCollection.Expression);
-            
-            // Filter movies and series based on the expression
-            var matchingMovies = new List<Movie>();
-            var matchingSeries = new List<Series>();
-            
-            if (expressionCollection.ParsedExpression != null)
-            {
-                // Normally the cache is opened once for the whole run; only take ownership
-                // of it here when this collection is being processed on its own.
-                var ownsPersonCache = _personToMoviesCache == null;
-                if (ownsPersonCache)
-                {
-                    InitializePersonCache();
-                }
-
-                try
-                {
-                    _logger.LogDebug("Evaluating movies against expression...");
-                    
-                    matchingMovies = allMovies
-                        .Where(movie => movie != null)
-                        .Where(movie => 
-                        {
-                            var matches = expressionCollection.ParsedExpression.Evaluate(
-                                (criteriaType, value) => EvaluateMovieCriteria(movie, criteriaType, value, expressionCollection.CaseSensitive)
-                            );
-                            
-                            if (matches)
-                            {
-                                var year = movie.ProductionYear?.ToString() ?? "Unknown year";
-                                _logger.LogDebug("  ✓ Movie matched: '{Title}' ({Year}) (ID: {Id})", 
-                                    movie.Name, year, movie.Id);
-                            }
-                            
-                            return matches;
-                        })
-                        .ToList();
-                    
-                    _logger.LogDebug("Evaluating series against expression...");
-                        
-                    matchingSeries = allSeries
-                        .Where(series => series != null)
-                        .Where(series => 
-                        {
-                            var matches = expressionCollection.ParsedExpression.Evaluate(
-                                (criteriaType, value) => EvaluateSeriesCriteria(series, criteriaType, value, expressionCollection.CaseSensitive)
-                            );
-                            
-                            if (matches)
-                            {
-                                var year = series.ProductionYear?.ToString() ?? "Unknown year";
-                                _logger.LogDebug("  ✓ Series matched: '{Title}' ({Year}) (ID: {Id})", 
-                                    series.Name, year, series.Id);
-                            }
-                            
-                            return matches;
-                        })
-                        .ToList();
-                }
-                finally
-                {
-                    if (ownsPersonCache)
-                    {
-                        ClearPersonCache();
-                    }
-                }
-            }
-            
-            _logger.LogInformation("Expression matched {MovieCount} movies and {SeriesCount} series", 
-                matchingMovies.Count, matchingSeries.Count);
-                
-            // Combine movies and series
-            var allMatchingItems = DedupeMediaItems(matchingMovies.Cast<BaseItem>().Concat(matchingSeries.Cast<BaseItem>()).ToList());         
+            var allMatchingItems = GetMatchingItemsForExpressionCollection(expressionCollection);
 
             // Update the collection (add new items, remove items that no longer match)
             await RemoveUnwantedMediaItems(collection, allMatchingItems);
-            await AddWantedMediaItems(collection, allMatchingItems);
-            await SortCollectionBy(collection, SortOrder.Descending);
+            await AddWantedMediaItems(collection, allMatchingItems, expressionCollection.SortBy, expressionCollection.SortOrder);
+            await SortCollectionBy(collection, expressionCollection.SortBy, expressionCollection.SortOrder);
 
             // Re-fetch the collection to get its updated children
             var updatedCollection = _libraryManager.GetItemById(collection.Id) as BoxSet;

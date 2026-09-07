@@ -19,6 +19,19 @@ using System.Text.Encodings.Web;
 namespace Jellyfin.Plugin.AutoCollections.Api
 {
     /// <summary>
+    /// Body of a single-collection preview request. Exactly one of the two is used.
+    /// </summary>
+    /// <remarks>
+    /// The properties deliberately do not share their types' names: the ASP.NET Core 2.2
+    /// TopLevelParameterNameAnalyzer crashes on that shape and fails the build with AD0001.
+    /// </remarks>
+    public class PreviewRequest
+    {
+        public TitleMatchPair Simple { get; set; }
+        public ExpressionCollection Advanced { get; set; }
+    }
+
+    /// <summary>
     /// The Auto Collections api controller.
     /// </summary>
     [ApiController]
@@ -86,6 +99,49 @@ namespace Jellyfin.Plugin.AutoCollections.Api
             return Accepted();
         }
         
+        /// <summary>
+        /// Works out what a sync would do to a single collection, without changing anything.
+        /// </summary>
+        /// <remarks>
+        /// The collection is posted in the request body rather than read from the saved
+        /// configuration, so a rule can be checked before it is saved - which is the point,
+        /// since saving it lets the scheduled task act on it.
+        /// </remarks>
+        /// <response code="200">The preview result.</response>
+        /// <response code="400">Neither a simple nor an advanced collection was supplied.</response>
+        [HttpPost("Preview")]
+        [Consumes("application/json")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult<CollectionPreview> Preview([FromBody] PreviewRequest request)
+        {
+            if (request?.Advanced != null)
+            {
+                return Ok(_syncAutoCollectionsManager.PreviewExpressionCollection(request.Advanced));
+            }
+
+            if (request?.Simple != null)
+            {
+                return Ok(_syncAutoCollectionsManager.PreviewTitleMatchPair(request.Simple));
+            }
+
+            return BadRequest(new { Message = "Supply either a Simple or an Advanced collection" });
+        }
+
+        /// <summary>
+        /// Works out what a sync would do to every collection in the supplied configuration.
+        /// </summary>
+        /// <response code="200">One preview result per collection.</response>
+        [HttpPost("PreviewAll")]
+        [Consumes("application/json")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public ActionResult<List<CollectionPreview>> PreviewAll([FromBody] PluginConfiguration configuration)
+        {
+            // Falls back to the saved configuration when the page sends nothing.
+            var toPreview = configuration ?? Plugin.Instance!.Configuration;
+            return Ok(_syncAutoCollectionsManager.PreviewConfiguration(toPreview));
+        }
+
         /// <summary>
         /// Exports the Auto Collections configuration to JSON.
         /// </summary>
