@@ -1,8 +1,8 @@
 ---
 name: "jellyfin-plugin-auto-collections"
 guid: "06ebf4a9-1326-4327-968d-8da00e1ea2eb"
-version: "0.0.7.0" # Please increment with each pull request
-jellyfin_version: "10.11.0" # The earliest binary-compatible version
+version: "0.0.8.0" # Please increment with each pull request
+jellyfin_version: "12.0.0" # The earliest binary-compatible version
 owner: "jellyfin"
 nicename: "Auto Collections"
 description: "Automatically create Auto Collections based on matching strings in the metadata."
@@ -12,4 +12,4 @@ artifacts:
   - "Jellyfin.Plugin.AutoCollections.dll"
 build_type: "dotnet"
 dotnet_configuration: "Release"
-dotnet_framework: "netstandard2.1"
+dotnet_framework: "net10.0"

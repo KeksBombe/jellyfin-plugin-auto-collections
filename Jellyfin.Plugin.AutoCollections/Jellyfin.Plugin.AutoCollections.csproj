@@ -1,10 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>true</IsPackable>
-    <AssemblyVersion>0.0.7.0</AssemblyVersion>
-    <FileVersion>0.0.7.0</FileVersion>
+    <AssemblyVersion>0.0.8.0</AssemblyVersion>
+    <FileVersion>0.0.8.0</FileVersion>
     <Authors />
     <Company />
     <RootNamespace>Jellyfin.Plugin.AutoCollections</RootNamespace>
@@ -13,8 +13,8 @@
 
   <PropertyGroup>
     <!-- Lowest Jellyfin the plugin is built against. Overridable so the build can be
-         checked against newer 10.11.x releases: dotnet build -p:JellyfinVersion=10.11.11 -->
-    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">10.11.0</JellyfinVersion>
+         checked against newer 12.0.x releases: dotnet build -p:JellyfinVersion=12.0.1 -->
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">12.0.0</JellyfinVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,7 +24,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" />
     <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.11" />
+    <!-- Microsoft.Extensions.Logging is part of the Microsoft.AspNetCore.App framework
+         reference on net10.0; referencing the package explicitly warns as NU1510. -->
   </ItemGroup>
 
   <ItemGroup>

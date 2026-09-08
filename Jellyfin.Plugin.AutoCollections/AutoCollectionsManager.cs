@@ -1023,9 +1023,9 @@ namespace Jellyfin.Plugin.AutoCollections
             catch (Exception ex) when (IsServerIncompatibility(ex))
             {
                 // The server exposes a different API surface than the one this plugin was built
-                // against - almost always a Jellyfin older than 10.11.
+                // against - almost always a Jellyfin older than 12.0.
                 _logger.LogError(ex,
-                    "Auto Collections could not run against this Jellyfin server. This plugin version requires Jellyfin 10.11 or newer; please update the server or install a plugin release matching it");
+                    "Auto Collections could not run against this Jellyfin server. This plugin version requires Jellyfin 12.0 or newer; please update the server or install a plugin release matching it");
                 throw;
             }
             finally
@@ -2744,7 +2744,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
 
                 // Get all users and check if ANY of them have played this item.
-                // Resolved through JellyfinCompat because 10.11.9 replaced IUserManager.Users with GetUsers().
+                // Routed through JellyfinCompat so the user lookup has a single call site.
                 var users = JellyfinCompat.GetUsers(_userManager);
 
                 if (users.Count == 0)
