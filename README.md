@@ -26,8 +26,13 @@ Either kind re-evaluates on every sync, so collections keep themselves current a
 
 ## 📋 Requirements
 
-- **Jellyfin**: Version 10.11 or later
+- **Jellyfin**: Version 12.0 or later
 - **Permissions**: Plugin requires collection management permissions
+
+> Jellyfin 12 moved the server to .NET 10, so a single plugin binary can no longer
+> serve both server lines. Releases `0.0.8.0` and newer target Jellyfin 12; stay on
+> `0.0.7.0` for Jellyfin 10.11. The plugin catalog offers each server the matching
+> release automatically.
 
 ## Share your config or find something cool!
 

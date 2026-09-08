@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Common.Api;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
@@ -35,6 +36,10 @@ namespace Jellyfin.Plugin.AutoCollections.Api
     /// The Auto Collections api controller.
     /// </summary>
     [ApiController]
+    // Every endpoint here is an admin operation: the sync and preview routes enumerate the
+    // whole library, and Export/Import/AddConfiguration read and overwrite plugin settings.
+    // Without this the controller inherits no policy at all and answers anonymous callers.
+    [Authorize(Policy = Policies.RequiresElevation)]
     [Route("AutoCollections")]
     [Produces(MediaTypeNames.Application.Json)]
 

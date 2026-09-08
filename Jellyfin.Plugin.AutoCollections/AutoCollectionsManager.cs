@@ -16,6 +16,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Data.Enums;
+using Jellyfin.Extensions;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Providers;
 using Jellyfin.Plugin.AutoCollections.Configuration;
@@ -1023,9 +1024,9 @@ namespace Jellyfin.Plugin.AutoCollections
             catch (Exception ex) when (IsServerIncompatibility(ex))
             {
                 // The server exposes a different API surface than the one this plugin was built
-                // against - almost always a Jellyfin older than 10.11.
+                // against - almost always a Jellyfin older than 12.0.
                 _logger.LogError(ex,
-                    "Auto Collections could not run against this Jellyfin server. This plugin version requires Jellyfin 10.11 or newer; please update the server or install a plugin release matching it");
+                    "Auto Collections could not run against this Jellyfin server. This plugin version requires Jellyfin 12.0 or newer; please update the server or install a plugin release matching it");
                 throw;
             }
             finally
@@ -1776,21 +1777,48 @@ namespace Jellyfin.Plugin.AutoCollections
         /// </remarks>
         private List<Person> FindPersonsByName(string nameToMatch, bool caseSensitive, bool exactMatch = false)
         {
-            StringComparison comparison = caseSensitive
-                ? StringComparison.Ordinal
-                : StringComparison.OrdinalIgnoreCase;
+            // Jellyfin stores Person.CleanName as Name.GetCleanValue() - diacritics stripped,
+            // lowercased, punctuation replaced by spaces, runs of whitespace collapsed - but
+            // matches NameContains against it with a plain, case-sensitive Contains. Handing
+            // it a raw name therefore silently misses everyone whose name differs from the
+            // query in case, diacritics or punctuation ("Steven Spielberg", "Kieslowski",
+            // "Robert Downey Jr."), so normalize the needle exactly the way the server did.
+            var cleanNeedle = nameToMatch.GetCleanValue();
 
-            return _libraryManager.GetItemList(new InternalItemsQuery
+            if (string.IsNullOrEmpty(cleanNeedle))
+            {
+                // Normalization can empty out a non-empty term (e.g. "..."). An empty
+                // NameContains disables the filter server-side, which would pull back every
+                // person in the library and match all of them, so stop here instead.
+                return new List<Person>();
+            }
+
+            var candidates = _libraryManager.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Person },
                 Recursive = true,
-                NameContains = nameToMatch
-            }).OfType<Person>()
-                // NameContains is case-insensitive in the query, so a case-sensitive
-                // search still has to be narrowed down here.
-                .Where(p => p.Name != null && (exactMatch
-                    ? p.Name.Equals(nameToMatch, comparison)
-                    : p.Name.Contains(nameToMatch, comparison)))
+                NameContains = cleanNeedle
+            }).OfType<Person>().Where(p => p.Name != null);
+
+            // The query is only a prefilter: it knows nothing about caseSensitive or
+            // exactMatch, and normalization makes it match more broadly than asked. Apply
+            // the requested semantics here.
+            if (caseSensitive)
+            {
+                // Compare the untouched names, so case and diacritics both have to line up.
+                return candidates
+                    .Where(p => exactMatch
+                        ? string.Equals(p.Name, nameToMatch, StringComparison.Ordinal)
+                        : p.Name!.Contains(nameToMatch, StringComparison.Ordinal))
+                    .ToList();
+            }
+
+            // Insensitive matching compares normalized forms on both sides, so it stays
+            // consistent with what the query already did.
+            return candidates
+                .Where(p => exactMatch
+                    ? string.Equals(p.Name!.GetCleanValue(), cleanNeedle, StringComparison.Ordinal)
+                    : p.Name!.GetCleanValue().Contains(cleanNeedle, StringComparison.Ordinal))
                 .ToList();
         }
 
@@ -2744,7 +2772,7 @@ namespace Jellyfin.Plugin.AutoCollections
                 }
 
                 // Get all users and check if ANY of them have played this item.
-                // Resolved through JellyfinCompat because 10.11.9 replaced IUserManager.Users with GetUsers().
+                // Routed through JellyfinCompat so the user lookup has a single call site.
                 var users = JellyfinCompat.GetUsers(_userManager);
 
                 if (users.Count == 0)
