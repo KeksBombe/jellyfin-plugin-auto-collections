@@ -2009,7 +2009,7 @@ namespace Jellyfin.Plugin.AutoCollections
                     return false;
 
                 case Configuration.CriteriaType.Filename:
-                    return !string.IsNullOrEmpty(movie.Path) && movie.Path.Contains(value, comparison);
+                    return AnyVersionPathContains(movie, value, comparison);
                     
                 case Configuration.CriteriaType.ReleaseDate:
                     return CompareDateValue(movie.PremiereDate, value);
@@ -2190,7 +2190,7 @@ namespace Jellyfin.Plugin.AutoCollections
 
                     foreach (var episode in episodesForFilename)
                     {
-                        if (!string.IsNullOrEmpty(episode.Path) && episode.Path.Contains(value, comparison))
+                        if (AnyVersionPathContains(episode, value, comparison))
                         {
                             return true;
                         }
@@ -2432,7 +2432,21 @@ namespace Jellyfin.Plugin.AutoCollections
             
             return result;
         }
-        
+
+        // A movie or episode with several versions is one library item whose Path is only the
+        // primary version's file; the other versions' paths live in the alternate-version lists.
+        private static bool AnyVersionPathContains(BaseItem item, string value, StringComparison comparison)
+        {
+            var paths = new List<string?> { item.Path };
+            if (item is Video video)
+            {
+                paths.AddRange(video.LocalAlternateVersions ?? Array.Empty<string>());
+                paths.AddRange((video.LinkedAlternateVersions ?? Array.Empty<LinkedChild>()).Select(l => l.Path));
+            }
+
+            return paths.Any(p => !string.IsNullOrEmpty(p) && p.Contains(value, comparison));
+        }
+
           // Helper method to handle numeric comparisons for ratings
         private bool CompareNumericValue(float? actualValue, string targetValueString)
         {
