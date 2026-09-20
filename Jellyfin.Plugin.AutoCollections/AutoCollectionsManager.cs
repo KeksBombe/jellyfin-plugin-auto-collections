@@ -2435,19 +2435,29 @@ namespace Jellyfin.Plugin.AutoCollections
 
         // A movie or episode with several versions is one library item whose Path is only the
         // primary version's file; the other versions' paths live in the alternate-version lists.
-        private static bool AnyVersionPathContains(BaseItem item, string value, StringComparison comparison)
+        private bool AnyVersionPathContains(BaseItem item, string value, StringComparison comparison)
         {
             var paths = new List<string?> { item.Path };
             if (item is Video video)
             {
-                paths.AddRange(video.LocalAlternateVersions ?? Array.Empty<string>());
-                paths.AddRange((video.LinkedAlternateVersions ?? Array.Empty<LinkedChild>()).Select(l => l.Path));
+                // Versions grouped from the same folder are stored as paths on the item itself.
+                paths.AddRange(video.LocalAlternateVersions ?? []);
+
+                // Versions merged by hand are stored as links; only the id is populated, so the
+                // linked item has to be fetched to learn its path.
+                foreach (var linked in video.LinkedAlternateVersions ?? [])
+                {
+                    if (linked.ItemId.HasValue)
+                    {
+                        paths.Add(_libraryManager.GetItemById(linked.ItemId.Value)?.Path);
+                    }
+                }
             }
 
             return paths.Any(p => !string.IsNullOrEmpty(p) && p.Contains(value, comparison));
         }
 
-          // Helper method to handle numeric comparisons for ratings
+        // Helper method to handle numeric comparisons for ratings
         private bool CompareNumericValue(float? actualValue, string targetValueString)
         {
             if (!actualValue.HasValue)
