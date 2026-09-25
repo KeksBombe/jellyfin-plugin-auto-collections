@@ -1082,14 +1082,20 @@
         // Initialize expression validation on load
         setupExpressionValidation();
 
+        // Jellyfin 10.11+ rejects the legacy X-MediaBrowser-Token header by default
+        // (EnableLegacyAuthorization is off), so raw fetch calls have to send the token in
+        // the standard Authorization header, the same way ApiClient does.
+        function authHeaders(headers) {
+          return Object.assign({
+            'Authorization': 'MediaBrowser Token="' + ApiClient.accessToken() + '"'
+          }, headers);
+        }
+
         // Export config logic
         document.getElementById('export-config-btn').addEventListener('click', function() {
-          fetch(ApiClient.getUrl('AutoCollections/ExportConfiguration'), { // Use ApiClient.getUrl and add auth
+          fetch(ApiClient.getUrl('AutoCollections/ExportConfiguration'), {
             method: 'GET',
-            headers: { 
-              'Accept': 'application/json',
-              'X-MediaBrowser-Token': ApiClient.accessToken()
-            }
+            headers: authHeaders({ 'Accept': 'application/json' })
           })
           .then(response => {
             if (!response.ok) throw new Error('Failed to export configuration: ' + response.statusText);
@@ -1157,10 +1163,7 @@
 
               fetch(ApiClient.getUrl(endpoint), { // Pass endpoint directly to ApiClient.getUrl
                 method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'X-MediaBrowser-Token': ApiClient.accessToken()
-                },
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
                 body: jsonContent
               })
               .then(response => {
